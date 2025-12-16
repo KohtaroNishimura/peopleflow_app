@@ -1,5 +1,6 @@
-from flask import Flask, jsonify
-import os, signal, subprocess, pathlib
+from flask import Flask, jsonify, request
+import json, os, signal, subprocess, pathlib, threading
+from datetime import datetime
 
 BASE_DIR = pathlib.Path(__file__).resolve().parent
 ROOT = BASE_DIR.parent
@@ -20,6 +21,11 @@ MASTER_CMD = [PYTHON, str(ROOT / "master_console" / "app.py")]
 
 STREAM_PID = f"/tmp/peopleflow_stream_{CAMERA_ID}_{CAMERA_PORT}.pid"
 MASTER_PID = f"/tmp/peopleflow_master_{MASTER_PORT}.pid"
+ORDERS_FILE = ROOT / "predictor" / "data" / "orders.jsonl"
+
+_order_lock = threading.Lock()
+_orders_loaded = False
+_known_order_ids: dict[str, str] = {}
 
 
 def _is_running(pid: int) -> bool:
@@ -75,6 +81,54 @@ def _stop(pid_file: str):
         pass
 
     return "stopped"
+
+
+def _load_existing_orders():
+    global _orders_loaded
+    if _orders_loaded:
+        return
+    if not ORDERS_FILE.exists():
+        return
+    with ORDERS_FILE.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                row = json.loads(stripped)
+            except json.JSONDecodeError:
+                continue
+            order_id = row.get("order_id")
+            timestamp = row.get("timestamp")
+            if order_id and timestamp:
+                _known_order_ids[order_id] = timestamp
+    _orders_loaded = True
+
+
+def _record_order_count(order_id: str | None, order_count: int, event_time: datetime) -> tuple[str, bool]:
+    if order_count <= 0:
+        order_count = 1
+    event_time = event_time.replace(microsecond=0)
+    event_ts = event_time.strftime("%Y-%m-%dT%H:%M:%S")
+    with _order_lock:
+        _load_existing_orders()
+        if order_id:
+            existing_ts = _known_order_ids.get(order_id)
+            if existing_ts:
+                return existing_ts, False
+        payload = {
+            "timestamp": event_ts,
+            "order_occurred": True,
+            "order_count": order_count,
+        }
+        if order_id:
+            payload["order_id"] = order_id
+        ORDERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with ORDERS_FILE.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        if order_id:
+            _known_order_ids[order_id] = event_ts
+    return event_ts, True
 
 
 @app.get("/")
@@ -144,6 +198,43 @@ def urls():
         "master_port": MASTER_PORT,
         "predict_port": PREDICT_PORT,
         "camera_id": CAMERA_ID
+    })
+
+
+@app.route("/api/orders/log", methods=["POST", "OPTIONS"])
+def record_order():
+    if request.method == "OPTIONS":
+        return ("", 204)
+    payload = request.get_json(silent=True) or {}
+    timestamp_raw = payload.get("time") or payload.get("timestamp")
+    if timestamp_raw:
+        try:
+            event_time = datetime.fromisoformat(timestamp_raw.replace("Z", "+00:00"))
+        except ValueError:
+            event_time = datetime.now()
+    else:
+        event_time = datetime.now()
+
+    reported_count = payload.get("order_count")
+    try:
+        order_count = int(reported_count)
+    except (TypeError, ValueError):
+        items = payload.get("items") or []
+        if isinstance(items, list):
+            quantities = [
+                int(item.get("quantity", 1)) for item in items if isinstance(item, dict)
+            ]
+            order_count = sum(q for q in quantities if q > 0) or 1
+        else:
+            order_count = 1
+
+    order_id = payload.get("id") or payload.get("order_id")
+    event_ts, created = _record_order_count(order_id, order_count, event_time)
+    return jsonify({
+        "ok": True,
+        "timestamp": event_ts,
+        "order_count": order_count,
+        "created": created
     })
 
 

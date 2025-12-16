@@ -13,6 +13,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   const menuContainer = document.getElementById('menuContainer');
   const todayLabel = document.getElementById('todayLabel');
+  const orderSyncStatus = document.getElementById('orderSyncStatus');
   const exportButton = document.getElementById('exportButton');
   const resetButton = document.getElementById('resetButton');
   const historyList = document.getElementById('historyList');
@@ -20,6 +21,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const cartTotalEl = document.getElementById('cartTotal');
   const checkoutButton = document.getElementById('checkoutButton');
   const clearCartButton = document.getElementById('clearCartButton');
+  let syncedIds = new Set();
 
   const pad = (value, length = 2) => String(value).padStart(length, '0');
 
@@ -113,6 +115,52 @@ window.addEventListener('DOMContentLoaded', () => {
 
   const saveCheckouts = (checkouts) => {
     localStorage.setItem(ordersStorageKey(), JSON.stringify(checkouts));
+  };
+
+  const syncStateStorageKey = () => `orders_synced_${getTodayString()}`;
+
+  const loadSyncedIdsFromStorage = () => {
+    const raw = localStorage.getItem(syncStateStorageKey());
+    if (!raw) return new Set();
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return new Set(parsed.filter((id) => typeof id === 'string'));
+      }
+    } catch (err) {
+      console.warn('同期状態の読み込みに失敗しました', err);
+    }
+    return new Set();
+  };
+
+  const persistSyncedIds = () => {
+    if (!syncedIds || syncedIds.size === 0) {
+      localStorage.removeItem(syncStateStorageKey());
+      return;
+    }
+    localStorage.setItem(syncStateStorageKey(), JSON.stringify([...syncedIds]));
+  };
+
+  const countPendingCheckouts = (checkouts) => {
+    const data = Array.isArray(checkouts) ? checkouts : loadCheckouts();
+    return data.reduce((count, entry) => (syncedIds.has(entry.id) ? count : count + 1), 0);
+  };
+
+  const updateSyncStatus = ({ message = null, error = false, checkouts = null } = {}) => {
+    if (!orderSyncStatus) return;
+    if (message) {
+      orderSyncStatus.textContent = message;
+      orderSyncStatus.classList.toggle('error', Boolean(error));
+      return;
+    }
+    const pending = countPendingCheckouts(checkouts);
+    if (pending === 0) {
+      orderSyncStatus.textContent = 'データ連携: 最新';
+      orderSyncStatus.classList.remove('error');
+    } else {
+      orderSyncStatus.textContent = `データ連携: 未送信 ${pending}件`;
+      orderSyncStatus.classList.add('error');
+    }
   };
 
   const loadCart = () => {
@@ -211,6 +259,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const data = checkouts ?? loadCheckouts();
     renderHistory(data);
     renderDailyTotal(data);
+    updateSyncStatus({ checkouts: data });
     return data;
   };
 
@@ -242,6 +291,57 @@ window.addEventListener('DOMContentLoaded', () => {
     renderCartSummary([]);
   };
 
+  const syncCheckoutToServer = async (checkoutEntry, { silent = false } = {}) => {
+    if (!checkoutEntry || syncedIds.has(checkoutEntry.id)) {
+      updateSyncStatus();
+      return;
+    }
+    const payload = {
+      id: checkoutEntry.id,
+      time: checkoutEntry.time,
+      order_count: checkoutEntry.orderUnits || checkoutEntry.items?.length || 1,
+      items: checkoutEntry.items,
+      total: checkoutEntry.total,
+    };
+    try {
+      updateSyncStatus({ message: 'データ送信中...' });
+      const response = await fetch('/api/orders/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+      if (!response.ok || !result?.ok || !result.timestamp) {
+        throw new Error(result?.error || '注文ログ送信エラー');
+      }
+      console.log(`[orders] logged at ${result.timestamp} (${result.order_count})`, result);
+      syncedIds.add(checkoutEntry.id);
+      persistSyncedIds();
+      updateSyncStatus();
+    } catch (err) {
+      console.warn('注文データの送信に失敗しました。ネットワーク状態を確認してください。', err);
+      updateSyncStatus({ message: 'データ連携エラー', error: true });
+      if (!silent) {
+        alert('注文データをサーバーに送信できませんでした。ネットワークやサーバーの状態を確認してください。');
+      }
+      throw err;
+    }
+  };
+
+  const syncPendingCheckouts = async () => {
+    const checkouts = loadCheckouts();
+    for (const entry of checkouts) {
+      if (!syncedIds.has(entry.id)) {
+        try {
+          await syncCheckoutToServer(entry, { silent: true });
+        } catch (err) {
+          break;
+        }
+      }
+    }
+    updateSyncStatus({ checkouts });
+  };
+
   const checkoutCart = () => {
     const cart = loadCart();
     if (cart.length === 0) {
@@ -250,17 +350,24 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     const items = aggregateCartItems(cart).map(({ key, ...rest }) => rest);
     const total = cart.reduce((sum, item) => sum + item.price, 0);
+    const orderUnits = Math.max(
+      1,
+      items.reduce((sum, item) => sum + (item.quantity || 0), 0)
+    );
     const checkouts = loadCheckouts();
-    checkouts.push({
+    const checkoutEntry = {
       id: createId(),
       time: getLocalDateTimeString(),
       items,
       total,
-    });
+      orderUnits,
+    };
+    checkouts.push(checkoutEntry);
     saveCheckouts(checkouts);
     saveCart([]);
     refreshCheckouts(checkouts);
     renderCartSummary([]);
+    syncCheckoutToServer(checkoutEntry).catch(() => {});
   };
 
   const exportToday = () => {
@@ -298,8 +405,11 @@ window.addEventListener('DOMContentLoaded', () => {
     if (!ok) return;
     localStorage.removeItem(ordersStorageKey());
     localStorage.removeItem(cartStorageKey());
+    localStorage.removeItem(syncStateStorageKey());
+    syncedIds = new Set();
     refreshCheckouts([]);
     renderCartSummary([]);
+    updateSyncStatus({ checkouts: [] });
   };
 
   const setupMenuButtons = () => {
@@ -332,13 +442,21 @@ window.addEventListener('DOMContentLoaded', () => {
       if (!localStorage.getItem(localCartKey) && localStorage.getItem(utcCartKey)) {
         localStorage.setItem(localCartKey, localStorage.getItem(utcCartKey));
       }
+
+      const localSyncKey = `orders_synced_${local}`;
+      const utcSyncKey = `orders_synced_${utc}`;
+      if (!localStorage.getItem(localSyncKey) && localStorage.getItem(utcSyncKey)) {
+        localStorage.setItem(localSyncKey, localStorage.getItem(utcSyncKey));
+      }
     };
 
     migrateStorageIfNeeded();
+    syncedIds = loadSyncedIdsFromStorage();
     renderTodayLabel();
     setupMenuButtons();
     refreshCart();
     refreshCheckouts();
+    syncPendingCheckouts().catch(() => {});
     if (exportButton) {
       exportButton.addEventListener('click', exportToday);
     }
