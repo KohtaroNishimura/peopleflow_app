@@ -21,9 +21,36 @@ window.addEventListener('DOMContentLoaded', () => {
   const checkoutButton = document.getElementById('checkoutButton');
   const clearCartButton = document.getElementById('clearCartButton');
 
-  const getTodayString = () => new Date().toISOString().slice(0, 10);
+  const pad = (value, length = 2) => String(value).padStart(length, '0');
+
+  const getLocalDateString = (date = new Date()) => {
+    const year = date.getFullYear();
+    const month = pad(date.getMonth() + 1);
+    const day = pad(date.getDate());
+    return `${year}-${month}-${day}`;
+  };
+
+  const getLocalDateTimeString = (date = new Date()) => {
+    const hours = pad(date.getHours());
+    const minutes = pad(date.getMinutes());
+    const seconds = pad(date.getSeconds());
+    const milliseconds = pad(date.getMilliseconds(), 3);
+    return `${getLocalDateString(date)}T${hours}:${minutes}:${seconds}.${milliseconds}`;
+  };
+
+  const getTodayString = () => getLocalDateString();
+  const getTodayUtcString = () => new Date().toISOString().slice(0, 10);
   const ordersStorageKey = () => `orders_${getTodayString()}`;
   const cartStorageKey = () => `cart_${getTodayString()}`;
+
+  const normalizeTimeString = (value) => {
+    if (!value) return getLocalDateTimeString();
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return getLocalDateTimeString();
+    }
+    return getLocalDateTimeString(date);
+  };
   const createId = () => {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) {
       return crypto.randomUUID();
@@ -56,7 +83,7 @@ window.addEventListener('DOMContentLoaded', () => {
           : items.reduce((sum, item) => sum + item.price * item.quantity, 0);
       return {
         id: entry.id || createId(),
-        time: entry.time || new Date().toISOString(),
+        time: normalizeTimeString(entry.time),
         items,
         total,
       };
@@ -65,7 +92,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const price = Number(entry?.price) || 0;
     return {
       id: entry?.id || `legacy_${index}_${Date.now()}`,
-      time: entry?.time || new Date().toISOString(),
+      time: normalizeTimeString(entry?.time),
       items: [
         {
           menuId: entry?.menuId ?? null,
@@ -201,7 +228,7 @@ window.addEventListener('DOMContentLoaded', () => {
       menuId,
       name: menu.name,
       price: menu.price,
-      addedAt: new Date().toISOString(),
+      addedAt: getLocalDateTimeString(),
     });
     saveCart(cart);
     renderCartSummary(cart);
@@ -226,7 +253,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const checkouts = loadCheckouts();
     checkouts.push({
       id: createId(),
-      time: new Date().toISOString(),
+      time: getLocalDateTimeString(),
       items,
       total,
     });
@@ -288,6 +315,26 @@ window.addEventListener('DOMContentLoaded', () => {
   };
 
   const init = () => {
+    // 以前の実装(UTC日付キー)で保存したデータがある場合、今日(ローカル日付キー)へ移行
+    const migrateStorageIfNeeded = () => {
+      const local = getTodayString();
+      const utc = getTodayUtcString();
+      if (local === utc) return;
+
+      const localOrdersKey = `orders_${local}`;
+      const utcOrdersKey = `orders_${utc}`;
+      if (!localStorage.getItem(localOrdersKey) && localStorage.getItem(utcOrdersKey)) {
+        localStorage.setItem(localOrdersKey, localStorage.getItem(utcOrdersKey));
+      }
+
+      const localCartKey = `cart_${local}`;
+      const utcCartKey = `cart_${utc}`;
+      if (!localStorage.getItem(localCartKey) && localStorage.getItem(utcCartKey)) {
+        localStorage.setItem(localCartKey, localStorage.getItem(utcCartKey));
+      }
+    };
+
+    migrateStorageIfNeeded();
     renderTodayLabel();
     setupMenuButtons();
     refreshCart();
