@@ -13,6 +13,7 @@ import json
 import os
 import signal
 import sys
+import requests
 from yolo_processor import YOLOProcessor
 import config
 from camera_discovery import discover_cameras_fast, discover_cameras, discover_cameras_by_info, get_local_ip
@@ -37,6 +38,7 @@ running = True  # アプリケーションの実行状態
 camera_threads = []  # カメラスレッドのリスト
 camera_running = {}  # 各カメラの実行状態（カメラIDをキー、True/Falseを値）
 camera_caps = {}  # 各カメラのVideoCaptureオブジェクト（停止時にリリースするため）
+camera_targets = {}  # 各カメラの制御先（子機のbase_url/port/ip）
 
 # カメラ設定（config.pyから読み込み）
 MAX_CAMERAS = config.MAX_CAMERAS
@@ -270,7 +272,7 @@ def handle_disconnect():
 @socketio.on('stop_camera')
 def handle_stop_camera(data):
     """カメラストリームの停止"""
-    global camera_running, camera_caps
+    global camera_running, camera_caps, camera_targets
     camera_id = data.get('camera_id')
     
     print(f"[停止] カメラ {camera_id} の停止をリクエストしました")
@@ -301,6 +303,7 @@ def handle_stop_camera(data):
         camera_streams.pop(camera_id)
     if camera_id in stream_queues:
         stream_queues.pop(camera_id)
+    camera_targets.pop(camera_id, None)
     
     emit('camera_stopped', {'camera_id': camera_id})
     print(f"✓ カメラ {camera_id} を停止しました")
@@ -329,6 +332,97 @@ def handle_get_status():
     
     print(f"[ステータス] ステータス情報を送信しました: {len([c for c in status['cameras'].values() if c['connected']])}台接続中")
     emit('status', status)
+
+@socketio.on('set_camera_controls')
+def handle_set_camera_controls(data):
+    """
+    子機カメラの露出/補正設定を更新（master_consoleが代理でHTTPリクエスト）
+    data: {camera_id, auto_exposure?, exposure?, software_ev?}
+    """
+    camera_id = data.get('camera_id')
+    if camera_id is None:
+        emit('camera_controls_applied', {'ok': False, 'message': 'camera_id がありません'})
+        return
+    try:
+        camera_id = int(camera_id)
+    except Exception:
+        emit('camera_controls_applied', {'ok': False, 'message': 'camera_id が不正です'})
+        return
+
+    target = camera_targets.get(camera_id)
+    if not target:
+        emit('camera_controls_applied', {'ok': False, 'camera_id': camera_id, 'message': 'カメラ制御先が未検出です（接続を更新してください）'})
+        return
+
+    url = f"{target['base_url']}:{target['port']}/controls"
+    payload = {}
+    for key in ("auto_exposure", "exposure", "software_ev"):
+        if key in data:
+            payload[key] = data[key]
+
+    try:
+        resp = requests.post(url, json=payload, timeout=1.5)
+        body = resp.json() if resp.headers.get('content-type', '').startswith('application/json') else {"text": resp.text}
+        ok = bool(resp.ok and body.get('ok', True))
+        message = '適用しました'
+        if not ok:
+            errors = (body.get('result') or {}).get('errors') if isinstance(body, dict) else None
+            if errors:
+                message = f"適用に失敗しました: {', '.join(map(str, errors))}"
+            else:
+                message = f'適用に失敗しました: HTTP {resp.status_code}'
+
+        emit('camera_controls_applied', {
+            'ok': bool(ok),
+            'camera_id': camera_id,
+            'target': target,
+            'response': body,
+            'message': message,
+        })
+    except Exception as e:
+        emit('camera_controls_applied', {
+            'ok': False,
+            'camera_id': camera_id,
+            'target': target,
+            'message': f'子機へのリクエストに失敗しました: {e}',
+        })
+
+@socketio.on('get_camera_controls')
+def handle_get_camera_controls(data):
+    """子機カメラの現在設定を取得"""
+    camera_id = data.get('camera_id')
+    if camera_id is None:
+        emit('camera_controls', {'ok': False, 'message': 'camera_id がありません'})
+        return
+    try:
+        camera_id = int(camera_id)
+    except Exception:
+        emit('camera_controls', {'ok': False, 'message': 'camera_id が不正です'})
+        return
+
+    target = camera_targets.get(camera_id)
+    if not target:
+        emit('camera_controls', {'ok': False, 'camera_id': camera_id, 'message': 'カメラ制御先が未検出です'})
+        return
+
+    url = f"{target['base_url']}:{target['port']}/controls"
+    try:
+        resp = requests.get(url, timeout=1.5)
+        body = resp.json() if resp.headers.get('content-type', '').startswith('application/json') else {"text": resp.text}
+        ok = bool(resp.ok)
+        emit('camera_controls', {
+            'ok': bool(ok),
+            'camera_id': camera_id,
+            'target': target,
+            'response': body,
+        })
+    except Exception as e:
+        emit('camera_controls', {
+            'ok': False,
+            'camera_id': camera_id,
+            'target': target,
+            'message': f'子機へのリクエストに失敗しました: {e}',
+        })
 
 def signal_handler(sig, frame):
     """シグナルハンドラ（Ctrl+C処理）"""
@@ -404,6 +498,7 @@ def handle_discover_cameras():
         
         # ストリーム読み込みスレッドを開始
         base_url = f"http://{ip}"
+        camera_targets[camera_id] = {"ip": ip, "port": port, "base_url": base_url}
         thread = threading.Thread(target=read_camera_stream_with_url, 
                                  args=(camera_id, port, base_url), daemon=True)
         camera_threads.append(thread)

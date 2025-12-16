@@ -97,6 +97,38 @@
             object-fit: contain;
             border: 2px solid #333;
         }
+
+        .camera-controls {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .camera-controls label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #cfcfcf;
+        }
+
+        .camera-controls input[type="range"] {
+            width: 140px;
+        }
+
+        .camera-controls .value {
+            min-width: 44px;
+            text-align: right;
+            font-family: 'Courier New', monospace;
+            color: #ffffff;
+        }
+
+        .btn-apply {
+            padding: 8px 12px;
+            font-size: 12px;
+        }
         
         .merged-view {
             background: #2a2a2a;
@@ -225,6 +257,14 @@
                     <span class="status-indicator disconnected" id="status-0"></span>
                 </div>
                 <img src="/video_feed/0" class="camera-feed" alt="Camera 0">
+                <div class="camera-controls">
+                    <label><input type="checkbox" id="ae-0" checked onchange="updateCameraControlUi(0)">AE</label>
+                    <label>露出 <input type="range" id="exp-0" min="1" max="5000" step="1" value="157" oninput="updateCameraControlUi(0)"></label>
+                    <span class="value" id="expv-0">200</span>
+                    <label>補正EV <input type="range" id="sev-0" min="-2" max="2" step="0.1" value="0" oninput="updateCameraControlUi(0)"></label>
+                    <span class="value" id="sevv-0">0.0</span>
+                    <button class="btn-refresh btn-apply" onclick="applyControls(0)">適用</button>
+                </div>
             </div>
             
             <div class="camera-box" id="camera-1">
@@ -233,6 +273,14 @@
                     <span class="status-indicator disconnected" id="status-1"></span>
                 </div>
                 <img src="/video_feed/1" class="camera-feed" alt="Camera 1">
+                <div class="camera-controls">
+                    <label><input type="checkbox" id="ae-1" checked onchange="updateCameraControlUi(1)">AE</label>
+                    <label>露出 <input type="range" id="exp-1" min="1" max="5000" step="1" value="157" oninput="updateCameraControlUi(1)"></label>
+                    <span class="value" id="expv-1">200</span>
+                    <label>補正EV <input type="range" id="sev-1" min="-2" max="2" step="0.1" value="0" oninput="updateCameraControlUi(1)"></label>
+                    <span class="value" id="sevv-1">0.0</span>
+                    <button class="btn-refresh btn-apply" onclick="applyControls(1)">適用</button>
+                </div>
             </div>
             
             <div class="camera-box" id="camera-2">
@@ -241,6 +289,14 @@
                     <span class="status-indicator disconnected" id="status-2"></span>
                 </div>
                 <img src="/video_feed/2" class="camera-feed" alt="Camera 2">
+                <div class="camera-controls">
+                    <label><input type="checkbox" id="ae-2" checked onchange="updateCameraControlUi(2)">AE</label>
+                    <label>露出 <input type="range" id="exp-2" min="1" max="5000" step="1" value="157" oninput="updateCameraControlUi(2)"></label>
+                    <span class="value" id="expv-2">200</span>
+                    <label>補正EV <input type="range" id="sev-2" min="-2" max="2" step="0.1" value="0" oninput="updateCameraControlUi(2)"></label>
+                    <span class="value" id="sevv-2">0.0</span>
+                    <button class="btn-refresh btn-apply" onclick="applyControls(2)">適用</button>
+                </div>
             </div>
             
             <div class="camera-box" id="camera-3">
@@ -249,6 +305,14 @@
                     <span class="status-indicator disconnected" id="status-3"></span>
                 </div>
                 <img src="/video_feed/3" class="camera-feed" alt="Camera 3">
+                <div class="camera-controls">
+                    <label><input type="checkbox" id="ae-3" checked onchange="updateCameraControlUi(3)">AE</label>
+                    <label>露出 <input type="range" id="exp-3" min="1" max="5000" step="1" value="157" oninput="updateCameraControlUi(3)"></label>
+                    <span class="value" id="expv-3">200</span>
+                    <label>補正EV <input type="range" id="sev-3" min="-2" max="2" step="0.1" value="0" oninput="updateCameraControlUi(3)"></label>
+                    <span class="value" id="sevv-3">0.0</span>
+                    <button class="btn-refresh btn-apply" onclick="applyControls(3)">適用</button>
+                </div>
             </div>
         </div>
         
@@ -271,6 +335,50 @@
     <script>
         const socket = io();
         const cameraPorts = [5000, 5001, 5002, 5003];
+
+        function setText(id, text) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+        }
+
+        function updateCameraControlUi(cameraId) {
+            const ae = document.getElementById(`ae-${cameraId}`);
+            const exp = document.getElementById(`exp-${cameraId}`);
+            const sev = document.getElementById(`sev-${cameraId}`);
+            if (!ae || !exp || !sev) return;
+
+            exp.disabled = ae.checked;
+            setText(`expv-${cameraId}`, exp.value);
+            setText(`sevv-${cameraId}`, Number(sev.value).toFixed(1));
+        }
+
+        function setupCameraControlUi(cameraId) {
+            const ae = document.getElementById(`ae-${cameraId}`);
+            const exp = document.getElementById(`exp-${cameraId}`);
+            const sev = document.getElementById(`sev-${cameraId}`);
+            if (!ae || !exp || !sev) return;
+
+            ae.addEventListener('change', () => updateCameraControlUi(cameraId));
+            exp.addEventListener('input', () => updateCameraControlUi(cameraId));
+            sev.addEventListener('input', () => updateCameraControlUi(cameraId));
+            updateCameraControlUi(cameraId);
+        }
+
+        function applyControls(cameraId) {
+            const ae = document.getElementById(`ae-${cameraId}`);
+            const exp = document.getElementById(`exp-${cameraId}`);
+            const sev = document.getElementById(`sev-${cameraId}`);
+            if (!ae || !exp || !sev) return;
+
+            const payload = {
+                camera_id: cameraId,
+                auto_exposure: !!ae.checked,
+                exposure: ae.checked ? null : Number(exp.value),
+                software_ev: Number(sev.value),
+            };
+            socket.emit('set_camera_controls', payload);
+            addLog(`カメラ ${cameraId + 1}: 露出/補正の適用をリクエストしました`, 'info');
+        }
         
         // ログ表示関数
         function addLog(message, type = 'info') {
@@ -318,6 +426,44 @@
                 const timestamp = new Date().getTime();
                 cameraFeed.src = `/video_feed/${cameraId}?t=${timestamp}`;
                 addLog(`カメラ ${cameraId + 1}: ストリーミングを開始しました`, 'success');
+            }
+
+            // 子機の現在設定を取得してUIに反映
+            socket.emit('get_camera_controls', { camera_id: cameraId });
+        });
+
+        socket.on('camera_controls', (data) => {
+            if (!data || data.camera_id === undefined) return;
+            const cameraId = data.camera_id;
+            if (!data.ok) {
+                addLog(`カメラ ${cameraId + 1}: 設定取得に失敗: ${data.message || 'unknown'}`, 'error');
+                return;
+            }
+
+            // camera_serverのレスポンスは {controls: {...}, last_result: ..., camera_open: ...}
+            const body = data.response || {};
+            const cam = body.controls || {};
+
+            const ae = document.getElementById(`ae-${cameraId}`);
+            const exp = document.getElementById(`exp-${cameraId}`);
+            const sev = document.getElementById(`sev-${cameraId}`);
+            if (!ae || !exp || !sev) return;
+
+            if (cam.auto_exposure !== undefined) ae.checked = !!cam.auto_exposure;
+            if (cam.exposure !== undefined && cam.exposure !== null) exp.value = Number(cam.exposure);
+            if (cam.software_ev !== undefined && cam.software_ev !== null) sev.value = Number(cam.software_ev);
+            updateCameraControlUi(cameraId);
+            addLog(`カメラ ${cameraId + 1}: 現在設定を取得しました`, 'success');
+        });
+
+        socket.on('camera_controls_applied', (data) => {
+            if (!data || data.camera_id === undefined) return;
+            const cameraId = data.camera_id;
+            if (data.ok) {
+                addLog(`カメラ ${cameraId + 1}: ${data.message || '適用しました'}`, 'success');
+                socket.emit('get_camera_controls', { camera_id: cameraId });
+            } else {
+                addLog(`カメラ ${cameraId + 1}: ${data.message || '適用に失敗しました'}`, 'error');
             }
         });
         
@@ -421,8 +567,9 @@
         window.addEventListener('load', () => {
             addLog('ページを読み込みました', 'info');
             addLog('「接続を更新」ボタンを押してカメラを検出してください', 'info');
+            addLog('露出調整: AEをOFFにすると「露出」スライダーが有効になります（値はカメラ依存 / v4l2 exposure_time_absolute想定）', 'info');
+            for (let i = 0; i < 4; i++) setupCameraControlUi(i);
         });
     </script>
 </body>
 </html>
-
