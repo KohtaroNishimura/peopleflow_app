@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>日次注文カウンター</title>
+    <style>
+      :root {
+        font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+        color: #1f2933;
+        background-color: #f5f5f5;
+      }
+
+      body {
+        margin: 0;
+        padding: 24px 16px 48px;
+        max-width: 480px;
+        margin-inline: auto;
+      }
+
+      h1 {
+        font-size: 1.6rem;
+        margin-bottom: 0.75rem;
+        text-align: center;
+      }
+
+      .storage-label {
+        font-size: 0.9rem;
+        color: #5f6b7c;
+        text-align: center;
+        margin-bottom: 16px;
+      }
+
+      .menu-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+
+      .menu-button {
+        border: none;
+        border-radius: 14px;
+        padding: 18px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        background: #0d9488;
+        color: #fff;
+        box-shadow: 0 6px 14px rgba(13, 148, 136, 0.35);
+        transition: transform 0.05s ease;
+        min-height: 80px;
+        touch-action: manipulation;
+      }
+
+      .menu-button:active {
+        transform: scale(0.97);
+      }
+
+      .price {
+        display: block;
+        font-size: 0.95rem;
+        font-weight: normal;
+        margin-top: 6px;
+        opacity: 0.85;
+      }
+
+      .cart-box {
+        background: #fff;
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        margin-bottom: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .cart-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+      }
+
+      .cart-clear {
+        border: none;
+        background: transparent;
+        color: #dc2626;
+        font-weight: 600;
+        font-size: 0.9rem;
+        touch-action: manipulation;
+      }
+
+      .cart-summary {
+        display: flex;
+        justify-content: space-between;
+        font-weight: 600;
+        border-top: 1px solid #e5e7eb;
+        padding-top: 8px;
+      }
+
+      .cart-total-value {
+        font-size: 2rem;
+        font-weight: 600;
+      }
+
+      .checkout-button {
+        border: none;
+        border-radius: 12px;
+        padding: 14px;
+        font-size: 1rem;
+        font-weight: 600;
+        background: #0d9488;
+        color: #fff;
+        touch-action: manipulation;
+      }
+
+      .checkout-button:disabled,
+      .cart-clear:disabled {
+        opacity: 0.5;
+      }
+
+      .cart-hint {
+        font-size: 0.9rem;
+        color: #6b7280;
+        text-align: center;
+      }
+
+      .actions {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .action-button {
+        border: none;
+        border-radius: 12px;
+        padding: 16px;
+        font-size: 1rem;
+        font-weight: 600;
+        background: #374151;
+        color: #fff;
+        touch-action: manipulation;
+      }
+
+      .action-button.secondary {
+        background: #dc2626;
+      }
+
+      @media (hover: hover) {
+        .menu-button:hover,
+        .action-button:hover,
+        .checkout-button:hover,
+        .cart-clear:hover {
+          opacity: 0.9;
+        }
+      }
+
+      .history-box {
+        margin-top: 28px;
+        background: #fff;
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      }
+
+      .history-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 12px;
+        font-weight: 600;
+        gap: 8px;
+      }
+
+      .history-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+      }
+
+      .history-total-label {
+        font-size: 0.85rem;
+        color: #111827;
+      }
+
+      .history-hint {
+        font-size: 0.8rem;
+        color: #5f6b7c;
+      }
+
+      .history-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .history-row {
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: #fdfdfd;
+        font-size: 0.95rem;
+      }
+
+      .history-info {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .history-total {
+        font-weight: 600;
+      }
+
+      .history-time {
+        font-size: 0.8rem;
+        color: #6b7280;
+        margin-top: 3px;
+      }
+
+      .history-empty {
+        text-align: center;
+        color: #6b7280;
+        font-size: 0.9rem;
+      }
+
+      #recordStatus {
+        font-weight: 600;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>日次注文カウンター</h1>
+    <div id="todayLabel" class="storage-label"></div>
+
+    <div class="cart-box">
+      <div class="cart-title">
+        <span>現在の小計</span>
+        <button id="clearCartButton" class="cart-clear" disabled>小計をクリア</button>
+      </div>
+      <div class="cart-summary">
+        <span>小計</span>
+        <span id="cartTotal" class="cart-total-value">¥0</span>
+      </div>
+      <button id="checkoutButton" class="checkout-button" disabled>会計を確定</button>
+      <div class="cart-hint">メニューをタップして小計を更新してください</div>
+    </div>
+
+    <div id="menuContainer" class="menu-grid"></div>
+
+    <div class="actions">
+      <button id="exportButton" class="action-button">今日のJSONを書き出す</button>
+      <button id="resetButton" class="action-button secondary">今日のデータをリセット</button>
+
+      <div class="cart-hint" style="margin-top:12px;">人流カメラ（ストリーミング）</div>
+      <div id="streamStatus" class="cart-hint">配信状態: 不明</div>
+
+      <div class="actions" style="margin-top:12px;">
+        <button id="streamStart" class="action-button">▶ カメラ配信 開始</button>
+        <button id="streamStop" class="action-button secondary">■ カメラ配信 停止</button>
+
+        <button id="masterStart" class="action-button">▶ 母艦コンソール 起動</button>
+        <button id="masterStop" class="action-button secondary">■ 母艦コンソール 停止</button>
+
+        <button id="openStream" class="action-button">📺 配信を開く</button>
+        <button id="openMaster" class="action-button">🧠 コンソールを開く</button>
+
+        <div id="svcStatus" class="cart-hint">状態: 不明</div>
+      </div>
+    </div>
+
+    <div class="history-box">
+      <div class="history-title">
+        <span>今日の注文履歴</span>
+        <div class="history-meta">
+          <span id="dailyTotal" class="history-total-label">合計 ¥0</span>
+        </div>
+      </div>
+      <div id="historyList" class="history-list"></div>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

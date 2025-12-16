@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.log
+
+.venv/
+venv/
+env/
+
+# カメラ検出のログと集計結果
+data/detections.jsonl
+data/detections_minutely.jsonl
+
+# VS Code等のローカル設定
+.DS_Store
+.vscode/

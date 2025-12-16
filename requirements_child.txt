@@ -1,0 +1,18 @@
+# 子機（Raspberry Pi）用のrequirements
+# 本番環境で子機にインストールする依存関係
+
+# Webフレームワーク（軽量）
+Flask>=3.0.0
+
+# カメラアクセス用
+opencv-python>=4.8.0
+
+# OpenCVの依存関係
+numpy>=1.26.0
+
+# 注意: 以下のパッケージは子機では不要です（母艦でのみ使用）
+# - flask-socketio (母艦でのみ使用)
+# - ultralytics (YOLO処理は母艦で実行)
+# - torch, torchvision (YOLO処理は母艦で実行)
+# - eventlet (母艦でのみ使用)
+
