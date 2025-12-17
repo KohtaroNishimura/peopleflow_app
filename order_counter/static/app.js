@@ -9,6 +9,7 @@ window.addEventListener('DOMContentLoaded', () => {
     fourteen: { name: '14', price: 1000 },
     takosen: { name: 'たこせん', price: 300 },
     topping: { name: 'トッピング', price: 50 },
+    adjustMinus50: { name: '-50円', price: -50 },
   };
   const TAKOYAKI_UNITS_BY_MENU = {
     four: 4,
@@ -18,6 +19,7 @@ window.addEventListener('DOMContentLoaded', () => {
     fourteen: 14,
     takosen: 2,
     topping: 0,
+    adjustminus50: 0,
   };
   const TAKOYAKI_UNITS_BY_NAME = {
     '4': 4,
@@ -41,6 +43,11 @@ window.addEventListener('DOMContentLoaded', () => {
     タコセン: 2,
     トッピング: 0,
     topping: 0,
+    '調整 -50': 0,
+    '調整-50': 0,
+    '-50': 0,
+    '-50円': 0,
+    '調整 -50円': 0,
   };
   const normalizeLabel = (value) => {
     if (value === null || value === undefined) return '';
@@ -97,8 +104,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const menuContainer = document.getElementById('menuContainer');
   const todayLabel = document.getElementById('todayLabel');
   const orderSyncStatus = document.getElementById('orderSyncStatus');
-  const exportButton = document.getElementById('exportButton');
-  const resetButton = document.getElementById('resetButton');
+  const clearHistoryButton = document.getElementById('clearHistoryButton');
   const historyList = document.getElementById('historyList');
   const dailyTotalEl = document.getElementById('dailyTotal');
   const cartTotalEl = document.getElementById('cartTotal');
@@ -314,6 +320,26 @@ window.addEventListener('DOMContentLoaded', () => {
         <span class="history-time">${timeText}</span>
       `;
       row.appendChild(info);
+      const deleteButton = document.createElement('button');
+      deleteButton.className = 'history-delete';
+      deleteButton.type = 'button';
+      deleteButton.textContent = '削除';
+      deleteButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const ok = confirm('この会計を注文履歴から削除しますか？');
+        if (!ok) return;
+        const checkouts = loadCheckouts();
+        const next = checkouts.filter((checkout) => checkout.id !== entry.id);
+        if (next.length === checkouts.length) return;
+        saveCheckouts(next);
+        if (syncedIds && syncedIds.has(entry.id)) {
+          syncedIds.delete(entry.id);
+          persistSyncedIds();
+        }
+        refreshCheckouts(next);
+      });
+      row.appendChild(deleteButton);
       historyList.appendChild(row);
     });
   };
@@ -343,6 +369,9 @@ window.addEventListener('DOMContentLoaded', () => {
     renderHistory(data);
     renderDailyTotal(data);
     updateSyncStatus({ checkouts: data });
+    if (clearHistoryButton) {
+      clearHistoryButton.disabled = data.length === 0;
+    }
     return data;
   };
 
@@ -461,46 +490,16 @@ window.addEventListener('DOMContentLoaded', () => {
     syncCheckoutToServer(checkoutEntry).catch(() => {});
   };
 
-  const exportToday = () => {
-    const checkouts = loadCheckouts();
-    if (checkouts.length === 0) {
-      alert('本日のデータはまだありません。');
-      return;
-    }
-    const date = getTodayString();
-    const fileName = `${ordersStorageKey()}.json`;
-    const json = JSON.stringify({ date, checkouts }, null, 2);
-    const file = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(file);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
-
-  const resetToday = () => {
+  const clearHistory = () => {
     const date = getTodayString();
     const hasCheckouts = loadCheckouts().length > 0;
-    const hasCart = loadCart().length > 0;
-    if (!hasCheckouts && !hasCart) {
-      if (confirm(`${date} のデータはありません。キーを初期化しますか？`)) {
-        localStorage.removeItem(ordersStorageKey());
-        localStorage.removeItem(cartStorageKey());
-      }
-      return;
-    }
-    const ok = confirm(`${date} の全ての会計とカートを削除します。よろしいですか？`);
+    if (!hasCheckouts) return;
+    const ok = confirm(`${date} の注文履歴を削除します。よろしいですか？`);
     if (!ok) return;
     localStorage.removeItem(ordersStorageKey());
-    localStorage.removeItem(cartStorageKey());
     localStorage.removeItem(syncStateStorageKey());
     syncedIds = new Set();
     refreshCheckouts([]);
-    renderCartSummary([]);
-    updateSyncStatus({ checkouts: [] });
   };
 
   const setupMenuButtons = () => {
@@ -548,11 +547,8 @@ window.addEventListener('DOMContentLoaded', () => {
     refreshCart();
     refreshCheckouts();
     syncPendingCheckouts().catch(() => {});
-    if (exportButton) {
-      exportButton.addEventListener('click', exportToday);
-    }
-    if (resetButton) {
-      resetButton.addEventListener('click', resetToday);
+    if (clearHistoryButton) {
+      clearHistoryButton.addEventListener('click', clearHistory);
     }
     if (checkoutButton) {
       checkoutButton.addEventListener('click', checkoutCart);
