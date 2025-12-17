@@ -693,8 +693,12 @@ if __name__ == '__main__':
     print("終了するには Ctrl+C を押してください\n")
     
     try:
-        # threadingモードの場合は通常のFlask runを使用
-        # SocketIOはthreadingモードで動作するため、socketio.runではなくapp.runを使用
-        app.run(host="0.0.0.0", port=PORT, debug=False)
+        # Flask-SocketIO のイベント/接続を有効にするため socketio.run を使用する
+        # （threading モードでも socketio.run が必要）
+        try:
+            socketio.run(app, host="0.0.0.0", port=PORT, debug=False, allow_unsafe_werkzeug=True)
+        except TypeError:
+            # Flask-SocketIO のバージョン差異で allow_unsafe_werkzeug が無い場合
+            socketio.run(app, host="0.0.0.0", port=PORT, debug=False)
     except KeyboardInterrupt:
         signal_handler(None, None)
