@@ -9,11 +9,17 @@ if [[ -d "$VENV_DIR" ]]; then
   . "$VENV_DIR/bin/activate"
 fi
 
-export PREDICTOR_DETECTIONS_FILE="${PREDICTOR_DETECTIONS_FILE:-$ROOT_DIR/predictor/data/detections_minutely.jsonl}"
+# 旧環境変数が data/ 配下を指している場合は predictor/data/ にリダイレクト
+LEGACY_DETECTIONS_PATH="$ROOT_DIR/data/detections_minutely.jsonl"
+DEFAULT_DETECTIONS_PATH="$ROOT_DIR/predictor/data/detections_minutely.jsonl"
+if [[ "${PREDICTOR_DETECTIONS_FILE:-}" == "$LEGACY_DETECTIONS_PATH" || -z "${PREDICTOR_DETECTIONS_FILE:-}" ]]; then
+  export PREDICTOR_DETECTIONS_FILE="$DEFAULT_DETECTIONS_PATH"
+fi
+
 export PREDICTOR_ORDERS_FILE="${PREDICTOR_ORDERS_FILE:-$ROOT_DIR/predictor/data/orders.jsonl}"
 export PREDICTOR_RESULTS_FILE="${PREDICTOR_RESULTS_FILE:-$ROOT_DIR/predictor/data/prediction_results.txt}"
 export PREDICTOR_MODEL_FILE="${PREDICTOR_MODEL_FILE:-$ROOT_DIR/predictor/data/model_real.json}"
-export PREDICTOR_CAMERA_IDS="${PREDICTOR_CAMERA_IDS:-0}"
+export PREDICTOR_CAMERA_IDS="${PREDICTOR_CAMERA_IDS:-1}"
 export PREDICT_PORT="${PREDICT_PORT:-5100}"
 
 exec python "$ROOT_DIR/predictor/app.py"

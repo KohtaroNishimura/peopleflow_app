@@ -495,17 +495,18 @@ class YOLOProcessor:
                         continue  # 不正な行はスキップ
             
             # 集計結果をカメラごとにまとめる
-            for camera_id in range(4):  # 0-3のカメラID
-                right_count = aggregated_data.get((camera_id, 'right'), 0)
-                left_count = aggregated_data.get((camera_id, 'left'), 0)
-                unknown_count = aggregated_data.get((camera_id, None), 0) + aggregated_data.get((camera_id, 'unknown'), 0)
+            for internal_id in range(4):  # 0-3のカメラID（表示上は1始まり）
+                right_count = aggregated_data.get((internal_id, 'right'), 0)
+                left_count = aggregated_data.get((internal_id, 'left'), 0)
+                unknown_count = aggregated_data.get((internal_id, None), 0) + aggregated_data.get((internal_id, 'unknown'), 0)
                 total_count = right_count + left_count + unknown_count
-                unique_count = len(unique_detections.get(camera_id, set()))
+                unique_count = len(unique_detections.get(internal_id, set()))
+                display_camera_id = internal_id + 1
                 
                 if total_count > 0:  # データがある場合のみ保存
                     aggregated_result = {
                         'timestamp': format_local_iso(start_time),
-                        'camera_id': camera_id,
+                        'camera_id': display_camera_id,
                         'right_count': right_count,
                         'left_count': left_count,
                         'unknown_count': unknown_count,
@@ -517,7 +518,7 @@ class YOLOProcessor:
                     with open(minutely_file, 'a', encoding='utf-8') as f:
                         f.write(json.dumps(aggregated_result, ensure_ascii=False) + '\n')
                     
-                    print(f"[集計処理] {start_time.strftime('%Y-%m-%d %H:%M')} - カメラ{camera_id}: "
+                    print(f"[集計処理] {start_time.strftime('%Y-%m-%d %H:%M')} - カメラ{display_camera_id}: "
                           f"右={right_count}, 左={left_count}, 合計={total_count}, ユニーク={unique_count}")
         
         except Exception as e:

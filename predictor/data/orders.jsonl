@@ -91,3 +91,6 @@
 {"timestamp": "2025-12-19T04:26:42", "order_occurred": true, "order_count": 4, "total_price": 350.0, "unit_price_for_count": 50, "takoyaki_count": 4, "order_id": "co_1766086002469_861d6ea40f6ef"}
 {"timestamp": "2025-12-19T04:44:54", "order_occurred": true, "order_count": 14, "total_price": 1000.0, "unit_price_for_count": 50, "takoyaki_count": 14, "order_id": "co_1766087094681_226daa1ac8f728"}
 {"timestamp": "2025-12-19T04:45:08", "order_occurred": true, "order_count": 6, "total_price": 450.0, "unit_price_for_count": 50, "takoyaki_count": 6, "order_id": "co_1766087108529_f720a718b39368"}
+{"timestamp": "2025-12-19T04:58:17", "order_occurred": true, "order_count": 4, "total_price": 350.0, "unit_price_for_count": 50, "takoyaki_count": 4, "order_id": "co_1766087897679_f447a27b8f4848"}
+{"timestamp": "2025-12-19T04:58:57", "order_occurred": true, "order_count": 6, "total_price": 450.0, "unit_price_for_count": 50, "takoyaki_count": 6, "order_id": "co_1766087937801_de2972cbe94c08"}
+{"timestamp": "2025-12-19T04:58:59", "order_occurred": true, "order_count": 2, "total_price": 300.0, "unit_price_for_count": 50, "takoyaki_count": 2, "order_id": "co_1766087939120_25d76553ac9868"}
