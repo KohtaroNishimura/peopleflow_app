@@ -915,3 +915,5 @@
 {"timestamp": "2025-12-19T04:42:00", "camera_id": 0, "right_count": 182, "left_count": 173, "unknown_count": 62, "total_count": 417, "unique_detections": 7}
 {"timestamp": "2025-12-19T04:43:00", "camera_id": 0, "right_count": 300, "left_count": 266, "unknown_count": 71, "total_count": 637, "unique_detections": 9}
 {"timestamp": "2025-12-19T04:44:00", "camera_id": 0, "right_count": 272, "left_count": 282, "unknown_count": 84, "total_count": 638, "unique_detections": 9}
+{"timestamp": "2025-12-19T04:47:00", "camera_id": 0, "right_count": 37, "left_count": 38, "unknown_count": 16, "total_count": 91, "unique_detections": 9}
+{"timestamp": "2025-12-19T04:53:00", "camera_id": 0, "right_count": 76, "left_count": 67, "unknown_count": 35, "total_count": 178, "unique_detections": 6}
