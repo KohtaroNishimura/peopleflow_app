@@ -369,6 +369,22 @@ python predictor/dummy.py 30    # 30秒間隔
 - JSONL形式（一行一レコード、UTF-8）
 - 既存システムからは append モードで追記
 
+### 人流ファイルの同期（自動連携したい場合）
+
+- YOLO 側の出力先: リポジトリ直下 `data/detections_minutely.jsonl`  
+  予測UIの読込先: `predictor/data/detections_minutely.jsonl`
+- 毎回コピーする代わりに、Windows のシンボリックリンクで自動同期するのがおすすめ。
+- **Gitでpullしてもリンクは共有されません。自動同期したい人だけ、自分のPCで1回リンクを作成してください。手動コピー派は何もしなくてOK。**
+- PowerShell（管理者/開発者モード）で:
+  ```
+  cd C:\Users\TY\Desktop\PGM\peopleflow_app
+  # 既存ファイルをバックアップする場合は先に .bak へコピー
+  Remove-Item predictor\data\detections_minutely.jsonl -Force
+  cmd /c mklink "C:\Users\TY\Desktop\PGM\peopleflow_app\predictor\data\detections_minutely.jsonl" "C:\Users\TY\Desktop\PGM\peopleflow_app\data\detections_minutely.jsonl"
+  ```
+- 失敗する場合は管理者権限の PowerShell で再実行するか、Windows の「開発者モード」を有効にしてください。
+- リンクが難しい場合は `Copy-Item data\detections_minutely.jsonl predictor\data\detections_minutely.jsonl -Force` で手動コピーでも可。
+
 ## トラブルシューティング
 
 - `model.json` が無い → `python train_model.py`
@@ -394,3 +410,24 @@ python predictor/dummy.py 30    # 30秒間隔
 - モデル性能が低い場合はより多くのデータが必要
 - ダミーデータはテスト専用
 - カレントディレクトリはプロジェクトルートで実行する
+
+## アプリ起動/終了 かんたん手順（Windows PowerShell）
+
+- 事前: `.venv` を作成し依存をインストール（raspi1217.md の手順と矛盾しません）
+- 起動するたびに:
+  ```
+  cd C:\Users\TY\Desktop\PGM\peopleflow_app
+  .venv\Scripts\activate
+  $env:YOLO_MODEL_PATH="C:\Users\TY\Desktop\PGM\peopleflow_app\yolov8n.pt"
+  $env:KNOWN_CHILD_IPS="192.168.10.106,192.168.10.107"
+  $env:CAMERA_PORTS="5001,5002,5003,5004"
+  # 母艦コンソール（統合ビュー＋YOLO）が必要なとき
+  python master_console\app.py
+  # 日次カウンター＋配信/母艦制御
+  python order_counter\app.py      # 5000番
+  # 予測ダッシュボード
+  $env:PREDICT_PORT="5100"
+  python predictor\app.py          # 5100番
+  ```
+- ブラウザ: `http://localhost:5000`（カウンター）、`http://localhost:5050`（統合ビュー/YOLO）、`http://localhost:5100`（予測）
+- 終了: 起動したターミナルで `Ctrl+C`。シンボリックリンクを張っていれば人流ファイルは自動で共有されます。

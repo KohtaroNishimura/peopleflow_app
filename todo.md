@@ -12,7 +12,7 @@
 ## 中優先（Pi 実機が戻ってきたら）
 - [ ] Pi でカメラ接続確認手順の実行（`lsusb`, `v4l2-ctl`, `ffmpeg`）。
 - [ ] systemd ユニットを配置し自動起動を確認する（`camera_server.service` の例を README に）。
-- [ ] `master_console` を起動して `camera_discovery` で検出されるか確認。
+- [OK] `master_console` を起動して `camera_discovery` で検出されるか確認。
 - [ ] YOLO 処理が `detections_minutely.jsonl` に出力されるか確認。
 
 ## 低優先（運用改善）

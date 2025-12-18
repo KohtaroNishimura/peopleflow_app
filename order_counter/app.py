@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request
-import json, os, signal, subprocess, pathlib, threading, unicodedata, time
+import json, os, signal, subprocess, pathlib, threading, unicodedata, sys, tempfile
 from datetime import datetime
 from typing import Optional
 
@@ -9,7 +9,14 @@ STATIC_DIR = BASE_DIR / "static"
 
 app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="")
 
-PYTHON = str(ROOT / ".venv" / "bin" / "python") if (ROOT / ".venv" / "bin" / "python").exists() else "python3"
+venv_python_win = ROOT / ".venv" / "Scripts" / "python.exe"
+venv_python_posix = ROOT / ".venv" / "bin" / "python"
+if venv_python_win.exists():
+    PYTHON = str(venv_python_win)
+elif venv_python_posix.exists():
+    PYTHON = str(venv_python_posix)
+else:
+    PYTHON = sys.executable
 
 # ==== 起動コマンド（必要なら環境変数で上書きOK）====
 CAMERA_ID = int(os.environ.get("CAMERA_ID", "0"))
@@ -56,8 +63,9 @@ TAKOYAKI_NAME_COUNTS = {
 STREAM_CMD = [PYTHON, str(ROOT / "camera_server.py"), str(CAMERA_ID), str(CAMERA_PORT)]
 MASTER_CMD = [PYTHON, str(ROOT / "master_console" / "app.py")]
 
-STREAM_PID = f"/tmp/peopleflow_stream_{CAMERA_ID}_{CAMERA_PORT}.pid"
-MASTER_PID = f"/tmp/peopleflow_master_{MASTER_PORT}.pid"
+PID_DIR = pathlib.Path(tempfile.gettempdir())
+STREAM_PID = str(PID_DIR / f"peopleflow_stream_{CAMERA_ID}_{CAMERA_PORT}.pid")
+MASTER_PID = str(PID_DIR / f"peopleflow_master_{MASTER_PORT}.pid")
 ORDERS_FILE = ROOT / "predictor" / "data" / "orders.jsonl"
 
 _order_lock = threading.Lock()
@@ -82,27 +90,10 @@ def _read_pid(pid_file: str):
         return None
 
 
-def _service_log_path(name: str | None) -> Optional[pathlib.Path]:
-    if not name:
-        return None
-    log_dir = ROOT / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    safe = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in name)
-    return log_dir / f"{safe}.log"
-
-
-def _tail_log(path: pathlib.Path | None, lines: int = 40) -> list[str]:
-    if not path or not path.exists():
-        return []
-    with path.open("r", encoding="utf-8", errors="ignore") as handle:
-        data = handle.readlines()
-    return [line.rstrip("\n") for line in data[-lines:]]
-
-
-def _start(cmd, pid_file: str, env: dict | None = None, *, log_name: str | None = None):
+def _start(cmd, pid_file: str, env: dict | None = None):
     pid = _read_pid(pid_file)
     if pid and _is_running(pid):
-        return pid, "already running", []
+        return pid, "already running"
     if pid and not _is_running(pid):
         try:
             os.remove(pid_file)
@@ -113,36 +104,17 @@ def _start(cmd, pid_file: str, env: dict | None = None, *, log_name: str | None 
     if env:
         merged_env.update(env)
 
-    log_path = _service_log_path(log_name)
-    log_handle = None
-    if log_path:
-        log_handle = open(log_path, "a", encoding="utf-8")
-        log_handle.write(f"\n[{datetime.now().isoformat()}] ==== start {cmd} ====\n")
-        log_handle.flush()
-    proc = subprocess.Popen(
-        cmd,
-        start_new_session=True,
-        env=merged_env,
-        stdout=log_handle if log_handle else None,
-        stderr=subprocess.STDOUT if log_handle else None,
-    )
-    if log_handle:
-        log_handle.flush()
-        log_handle.close()
+    creationflags = 0
+    start_new_session = False
+    if os.name == "nt":
+        creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    else:
+        start_new_session = True
 
-    time.sleep(1.0)
-    if proc.poll() is not None:
-        if os.path.exists(pid_file):
-            try:
-                os.remove(pid_file)
-            except Exception:
-                pass
-        log_tail = _tail_log(log_path)
-        return None, f"failed (exit {proc.returncode}). log_path={log_path}", log_tail
-
+    proc = subprocess.Popen(cmd, start_new_session=start_new_session, creationflags=creationflags, env=merged_env)
     with open(pid_file, "w") as f:
         f.write(str(proc.pid))
-    return proc.pid, "started", []
+    return proc.pid, "started"
 
 
 def _stop(pid_file: str):
@@ -151,7 +123,10 @@ def _stop(pid_file: str):
         return "not running"
 
     try:
-        os.killpg(pid, signal.SIGTERM)
+        if hasattr(os, "killpg"):
+            os.killpg(pid, signal.SIGTERM)
+        else:
+            os.kill(pid, signal.SIGTERM)
     except Exception:
         pass
 
@@ -276,6 +251,28 @@ def _extract_total_price(payload: dict) -> Optional[float]:
     return None
 
 
+def _child_env() -> dict:
+    """
+    子プロセス(camera_server/master_console)に引き継ぐ環境変数をまとめる。
+    Windowsでターミナルから起動したときと同じ設定を渡すため。
+    """
+    keys = [
+        "YOLO_MODEL_PATH",
+        "KNOWN_CHILD_IPS",
+        "CAMERA_PORTS",
+        "CAMERA_ID",
+        "CAMERA_PORT",
+        "MASTER_PORT",
+        "PREDICT_PORT",
+    ]
+    env = {}
+    for key in keys:
+        value = os.environ.get(key)
+        if value:
+            env[key] = value
+    return env
+
+
 def _record_order_count(
     order_id: str | None, order_count: int, event_time: datetime, total_price: Optional[float] = None
 ) -> tuple[str, bool]:
@@ -326,13 +323,7 @@ def stream_status():
 
 @app.post("/api/stream/start")
 def stream_start():
-    pid, msg, tail = _start(
-        STREAM_CMD,
-        STREAM_PID,
-        log_name=f"stream_{CAMERA_ID}_{CAMERA_PORT}",
-    )
-    if pid is None:
-        return jsonify({"ok": False, "message": msg, "log_tail": tail}), 500
+    pid, msg = _start(STREAM_CMD, STREAM_PID, env=_child_env())
     return jsonify({"ok": True, "pid": pid, "message": msg})
 
 
@@ -355,26 +346,13 @@ def master_status():
 
 @app.post("/api/master/start")
 def master_start():
-    # “同一ラズパイ内”で子機を見つけに行く想定（必要なら変更OK）
-    env = {
-        "MASTER_PORT": str(MASTER_PORT),
-        "CAMERA_PORTS": os.environ.get("CAMERA_PORTS", str(CAMERA_PORT)),
-        "KNOWN_CHILD_IPS": os.environ.get("KNOWN_CHILD_IPS", "127.0.0.1"),
-    }
-    if "YOLO_MODEL_PATH" not in os.environ:
-        local_model = ROOT / "yolov8n.pt"
-        if local_model.exists():
-            env["YOLO_MODEL_PATH"] = str(local_model)
-    pid, msg, tail = _start(
-        MASTER_CMD,
-        MASTER_PID,
-        env=env,
-        log_name=f"master_{MASTER_PORT}",
-    )
-    if pid is None:
-        return jsonify({"ok": False, "message": msg, "log_tail": tail}), 500
+    # ????????????????????????????OK?
+    env = _child_env()
+    env.setdefault("MASTER_PORT", str(MASTER_PORT))
+    env.setdefault("CAMERA_PORTS", os.environ.get("CAMERA_PORTS", str(CAMERA_PORT)))
+    env.setdefault("KNOWN_CHILD_IPS", os.environ.get("KNOWN_CHILD_IPS", "127.0.0.1"))
+    pid, msg = _start(MASTER_CMD, MASTER_PID, env=env)
     return jsonify({"ok": True, "pid": pid, "message": msg})
-
 
 @app.post("/api/master/stop")
 def master_stop():
