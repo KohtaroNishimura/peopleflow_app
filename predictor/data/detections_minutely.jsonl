@@ -478,3 +478,11 @@
 {"timestamp": "2025-12-15T16:29:00", "camera_id": 2, "right_count": 16, "left_count": 3, "unknown_count": 13, "total_count": 32, "unique_detections": 2}
 {"timestamp": "2025-12-15T16:29:00", "camera_id": 3, "right_count": 0, "left_count": 68, "unknown_count": 23, "total_count": 91, "unique_detections": 1}
 {"timestamp": "2025-12-15T16:29:00", "camera_id": 4, "right_count": 28, "left_count": 33, "unknown_count": 21, "total_count": 82, "unique_detections": 2}
+{"timestamp": "2025-12-15T16:30:00", "camera_id": 1, "right_count": 70, "left_count": 8, "unknown_count": 25, "total_count": 103, "unique_detections": 2}
+{"timestamp": "2025-12-15T16:30:00", "camera_id": 2, "right_count": 18, "left_count": 14, "unknown_count": 6, "total_count": 38, "unique_detections": 2}
+{"timestamp": "2025-12-15T16:30:00", "camera_id": 3, "right_count": 36, "left_count": 47, "unknown_count": 18, "total_count": 101, "unique_detections": 1}
+{"timestamp": "2025-12-15T16:30:00", "camera_id": 4, "right_count": 9, "left_count": 47, "unknown_count": 21, "total_count": 77, "unique_detections": 1}
+{"timestamp": "2025-12-15T16:31:00", "camera_id": 1, "right_count": 57, "left_count": 26, "unknown_count": 33, "total_count": 116, "unique_detections": 3}
+{"timestamp": "2025-12-15T16:31:00", "camera_id": 2, "right_count": 39, "left_count": 29, "unknown_count": 20, "total_count": 88, "unique_detections": 2}
+{"timestamp": "2025-12-15T16:31:00", "camera_id": 3, "right_count": 11, "left_count": 32, "unknown_count": 18, "total_count": 61, "unique_detections": 2}
+{"timestamp": "2025-12-15T16:31:00", "camera_id": 4, "right_count": 24, "left_count": 25, "unknown_count": 30, "total_count": 79, "unique_detections": 1}
