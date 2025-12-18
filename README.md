@@ -150,8 +150,8 @@ ls -l /dev/video*
 
 ## データファイル
 
-- `data/detections.jsonl` - リアルタイム検出データ（30分で自動削除）
-- `data/detections_minutely.jsonl` - 1分ごとの集計データ
+- `predictor/data/detections.jsonl` - リアルタイム検出データ（30分で自動削除）
+- `predictor/data/detections_minutely.jsonl` - 1分ごとの集計データ
 
 ---
 
@@ -224,9 +224,9 @@ ls -l /dev/video*
 
 **データソース**: 4つのカメラからのYOLO検出結果（分単位）
 
-補足: 現行システムでは実データがプロジェクト直下の `data/detections_minutely.jsonl` に出力される場合があります。\
-その場合は予測側を環境変数で実データに向けられます（カメラIDが 0 始まりなら `PREDICTOR_CAMERA_IDS=0` など）。\
-リポジトリにはこの設定をまとめたスクリプトを用意しています（後述「現場運用 (実データ)」参照）。
+補足: master_console の YOLO 集計 (`yolo_processor.py`) は既定で `predictor/data/` に書き込み、予測システムと同一ディレクトリを共有します。\
+以前のように別ディレクトリに出力したい場合は `PEOPLEFLOW_DATA_DIR=/path/to/data` を設定してください。\
+リポジトリにはこれらの環境変数をまとめたスクリプトを用意しています（後述「現場運用 (実データ)」参照）。
 
 **ファイル形式**: JSONL（JSON Lines）形式
 - 1行に1つのJSONオブジェクト
@@ -258,7 +258,8 @@ ls -l /dev/video*
 
 **データ生成の仕様**:
 - **更新頻度**: 1分ごとに4つのカメラ分のデータを追加
-- **タイムスタンプ**: 同一時刻に4つのカメラ（camera_id: 1, 2, 3, 4）のデータが記録される
+- **タイムスタンプ**: 同一時刻に複数カメラのデータが記録される
+- **カメラID**: 既定では 0,1,2,3（0 始まり）。別のID体系を使う場合は `PREDICTOR_CAMERA_IDS` で `cam_id_left/right` の並びを上書きしてください。
 - **データの順序**: タイムスタンプ順に並んでいる必要はないが、最新データはファイル末尾に追加される
 - **必須フィールド**: すべてのフィールドが必須
 - **データ型**: すべて数値は整数型（JSONのnumber型、小数点なし）
@@ -282,7 +283,7 @@ with open(detections_path, 'r', encoding='utf-8') as f:
 
 ## 現場運用 (実データ)
 
-12月18日の実データをはじめ、`data/detections_minutely.jsonl` に記録されるカウントをそのまま予測モデルに流用できます。\
+12月18日の実データをはじめ、`predictor/data/detections_minutely.jsonl` に記録されるカウントをそのまま予測モデルに流用できます。\
 現場では以下の2ステップだけで済むようにスクリプト化しました。
 
 1. **最新データでモデルを学習**  
@@ -290,7 +291,7 @@ with open(detections_path, 'r', encoding='utf-8') as f:
    ./scripts/train_predictor_real.sh
    ```
    - `.venv` があれば自動で読み込まれます
-   - 実データ (`data/detections_minutely.jsonl`) と本番の注文データ (`predictor/data/orders.jsonl`) を参照します
+   - 実データ (`predictor/data/detections_minutely.jsonl`) と本番の注文データ (`predictor/data/orders.jsonl`) を参照します
    - 学習済みモデルは `predictor/data/model_real.json` に保存されます
    - 追加データを取得したら再実行してください（夜の片付け時などに1回走らせる運用がおすすめ）
 

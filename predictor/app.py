@@ -28,7 +28,7 @@ dummy_generator = DummyDataGenerator()
 PREDICT_PORT = int(os.environ.get("PREDICT_PORT", "5100"))
 
 REAL_DETECTIONS_FILE = Path(
-    os.environ.get("PREDICTOR_REAL_DETECTIONS_FILE", str((BASE_DIR.parent / "data" / "detections_minutely.jsonl")))
+    os.environ.get("PREDICTOR_REAL_DETECTIONS_FILE", str((BASE_DIR / "data" / "detections_minutely.jsonl")))
 )
 DUMMY_DETECTIONS_FILE = Path(
     os.environ.get("PREDICTOR_DUMMY_DETECTIONS_FILE", str(DATA_DIR / "detections_minutely.jsonl"))

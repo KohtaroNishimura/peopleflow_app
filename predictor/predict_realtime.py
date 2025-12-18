@@ -12,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent
 
 def _parse_camera_ids(raw: str | None) -> List[int]:
     if not raw:
-        return [1, 2, 3, 4]
+        return [0, 1, 2, 3, 4]
     camera_ids: List[int] = []
     for part in str(raw).split(","):
         part = part.strip()

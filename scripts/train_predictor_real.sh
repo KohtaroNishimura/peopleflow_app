@@ -9,7 +9,7 @@ if [[ -d "$VENV_DIR" ]]; then
   . "$VENV_DIR/bin/activate"
 fi
 
-export PREDICTOR_DETECTIONS_FILE="${PREDICTOR_DETECTIONS_FILE:-$ROOT_DIR/data/detections_minutely.jsonl}"
+export PREDICTOR_DETECTIONS_FILE="${PREDICTOR_DETECTIONS_FILE:-$ROOT_DIR/predictor/data/detections_minutely.jsonl}"
 export PREDICTOR_ORDERS_FILE="${PREDICTOR_ORDERS_FILE:-$ROOT_DIR/predictor/data/orders.jsonl}"
 export PREDICTOR_RESULTS_FILE="${PREDICTOR_RESULTS_FILE:-$ROOT_DIR/predictor/data/prediction_results.txt}"
 export PREDICTOR_MODEL_FILE="${PREDICTOR_MODEL_FILE:-$ROOT_DIR/predictor/data/model_real.json}"

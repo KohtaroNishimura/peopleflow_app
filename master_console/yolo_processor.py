@@ -78,7 +78,7 @@ class YOLOProcessor:
         """
         self.confidence_threshold = confidence_threshold
         self.detection_queue = queue.Queue()  # 検出結果を保存するキュー
-        default_data_dir = str(Path(__file__).resolve().parents[1] / "data")
+        default_data_dir = str(Path(__file__).resolve().parents[1] / "predictor" / "data")
         self.data_dir = os.environ.get("PEOPLEFLOW_DATA_DIR", default_data_dir)
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)
