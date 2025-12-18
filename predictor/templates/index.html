@@ -853,6 +853,29 @@
                     sourceEl.textContent = data.source === 'dummy' ? '入力: ダミー' : '入力: 実データ';
                 }
                 
+                // サーバから履歴が渡されている場合はそれを優先的に利用
+                if (Array.isArray(data.history) && data.history.length > 0) {
+                    predictionHistory = data.history
+                        .map(item => {
+                            const ts = new Date(item.timestamp);
+                            if (isNaN(ts.getTime())) {
+                                return null;
+                            }
+                            const predValue = typeof item.prediction === 'number'
+                                ? item.prediction
+                                : parseFloat(item.prediction);
+                            const actualValue = item.actual !== null && item.actual !== undefined
+                                ? Number(item.actual)
+                                : null;
+                            return {
+                                timestamp: ts,
+                                prediction: isNaN(predValue) ? 0 : predValue,
+                                actual: actualValue
+                            };
+                        })
+                        .filter(item => item !== null);
+                }
+                
                 // 忙しさインジケータを更新
                 updateBusynessIndicator(prediction);
                 
@@ -885,6 +908,21 @@
                     const itemTime = item.timestamp instanceof Date ? item.timestamp : new Date(item.timestamp);
                     return !isNaN(itemTime.getTime()) && itemTime >= oneDayAgo;
                 });
+                
+                // 重複タイムスタンプを除外（最後に追加された値を優先）
+                const seenTimestamps = new Set();
+                predictionHistory = predictionHistory
+                    .slice()
+                    .reverse()
+                    .filter(item => {
+                        const iso = (item.timestamp instanceof Date ? item.timestamp : new Date(item.timestamp)).toISOString();
+                        if (seenTimestamps.has(iso)) {
+                            return false;
+                        }
+                        seenTimestamps.add(iso);
+                        return true;
+                    })
+                    .reverse();
                 
                 // デバッグ用ログ（開発時のみ）
                 console.log('データ追加:', {

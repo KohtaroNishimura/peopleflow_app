@@ -367,6 +367,40 @@ def describe_influences(model: Dict, features: Dict[str, int]) -> List[Dict]:
     return influences
 
 
+def build_prediction_history(
+    model: Dict,
+    window_minutes: int = 60,
+    horizon_minutes: int = 10,
+    tolerance_minutes: int = 5,
+    max_points: int = 240,
+) -> List[Dict]:
+    """過去の予測と実測のペアを生成"""
+    if not model:
+        return []
+
+    records = build_dataset_records(horizon_minutes, tolerance_minutes)
+    if not records:
+        return []
+
+    cutoff = datetime.now() - timedelta(minutes=window_minutes) if window_minutes else None
+    series: List[Dict] = []
+    for base_time, features, actual, actual_time in records:
+        if cutoff and base_time < cutoff:
+            continue
+        series.append(
+            {
+                "timestamp": base_time.isoformat(),
+                "prediction": predict_from_features(model, features),
+                "actual": actual,
+                "actual_timestamp": actual_time.isoformat(),
+            }
+        )
+    series.sort(key=lambda item: item["timestamp"])
+    if max_points and len(series) > max_points:
+        series = series[-max_points:]
+    return series
+
+
 def compute_busy_level(prediction: float) -> Dict[str, str]:
     if prediction < 2:
         return {"label": "余裕あり", "emoji": "😌"}

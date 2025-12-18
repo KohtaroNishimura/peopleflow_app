@@ -10,6 +10,7 @@ from predict_realtime import (
     DATA_DIR,
     compute_busy_level,
     describe_influences,
+    build_prediction_history,
     load_latest_features,
     load_latest_features_from,
     load_model,
@@ -73,6 +74,13 @@ def api_predict():
     prediction = predict_from_features(model, features)
     influences = describe_influences(model, features)
     busy_level = compute_busy_level(prediction)
+    history = build_prediction_history(model)
+    latest_actual = None
+    for entry in reversed(history):
+        actual_value = entry.get("actual")
+        if actual_value is not None:
+            latest_actual = actual_value
+            break
 
     response = {
         "ok": True,
@@ -81,9 +89,11 @@ def api_predict():
         "dummy_detections_file": str(DUMMY_DETECTIONS_FILE),
         "timestamp": timestamp,
         "prediction": prediction,
+        "actual_order": latest_actual,
         "busy_level": busy_level,
         "features": features,
         "influences": influences,
+        "history": history,
         "model": {
             "r2": model.get("r2"),
             "rmse": model.get("rmse"),
