@@ -7,9 +7,11 @@ from flask import Flask, jsonify, render_template
 
 from dummy import DummyDataGenerator
 from predict_realtime import (
+    DATA_DIR,
     compute_busy_level,
     describe_influences,
     load_latest_features,
+    load_latest_features_from,
     load_model,
     load_prediction_results_text,
     predict_from_features,
@@ -25,6 +27,13 @@ app = Flask(
 dummy_generator = DummyDataGenerator()
 PREDICT_PORT = int(os.environ.get("PREDICT_PORT", "5100"))
 
+REAL_DETECTIONS_FILE = Path(
+    os.environ.get("PREDICTOR_REAL_DETECTIONS_FILE", str((BASE_DIR.parent / "data" / "detections_minutely.jsonl")))
+)
+DUMMY_DETECTIONS_FILE = Path(
+    os.environ.get("PREDICTOR_DUMMY_DETECTIONS_FILE", str(DATA_DIR / "detections_minutely.jsonl"))
+)
+
 
 @app.route("/")
 def index():
@@ -37,9 +46,28 @@ def api_predict():
     if not model:
         return jsonify({"ok": False, "error": "model.json が見つかりません。train_model.py を実行してください。"}), 404
 
-    snapshot = load_latest_features()
+    source = "real"
+    snapshot = None
+    if dummy_generator.is_running():
+        snapshot = load_latest_features_from(DUMMY_DETECTIONS_FILE)
+        if snapshot is not None:
+            source = "dummy"
     if snapshot is None:
-        return jsonify({"ok": False, "error": "最新の検出データがありません。dummy.py を実行してデータを生成してください。"}), 404
+        snapshot = load_latest_features_from(REAL_DETECTIONS_FILE)
+        source = "real"
+    if snapshot is None:
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "最新の検出データがありません（real/dummy 両方とも空）。",
+                    "source": source,
+                    "real_detections_file": str(REAL_DETECTIONS_FILE),
+                    "dummy_detections_file": str(DUMMY_DETECTIONS_FILE),
+                }
+            ),
+            404,
+        )
 
     timestamp, features = snapshot
     prediction = predict_from_features(model, features)
@@ -48,6 +76,9 @@ def api_predict():
 
     response = {
         "ok": True,
+        "source": source,
+        "real_detections_file": str(REAL_DETECTIONS_FILE),
+        "dummy_detections_file": str(DUMMY_DETECTIONS_FILE),
         "timestamp": timestamp,
         "prediction": prediction,
         "busy_level": busy_level,

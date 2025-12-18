@@ -8,18 +8,45 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
-DETECTIONS_FILE = DATA_DIR / "detections_minutely.jsonl"
-ORDERS_FILE = DATA_DIR / "orders.jsonl"
-MODEL_FILE = DATA_DIR / "model.json"
-RESULTS_FILE = DATA_DIR / "prediction_results.txt"
 
-CAMERA_IDS = [1, 2, 3, 4]
-FEATURE_NAMES = [
-    f"cam{camera_id}_{direction}"
-    for camera_id in CAMERA_IDS
-    for direction in ("left", "right")
-]
+
+def _parse_camera_ids(raw: str | None) -> List[int]:
+    if not raw:
+        return [1, 2, 3, 4]
+    camera_ids: List[int] = []
+    for part in str(raw).split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            camera_ids.append(int(part))
+        except ValueError:
+            continue
+    return camera_ids or [1, 2, 3, 4]
+
+
+def _resolve_data_dir() -> Path:
+    configured = os.environ.get("PREDICTOR_DATA_DIR")
+    if configured:
+        return Path(configured).expanduser()
+    return BASE_DIR / "data"
+
+
+def _resolve_file(env_key: str, default: Path) -> Path:
+    configured = os.environ.get(env_key)
+    if configured:
+        return Path(configured).expanduser()
+    return default
+
+
+DATA_DIR = _resolve_data_dir()
+DETECTIONS_FILE = _resolve_file("PREDICTOR_DETECTIONS_FILE", DATA_DIR / "detections_minutely.jsonl")
+ORDERS_FILE = _resolve_file("PREDICTOR_ORDERS_FILE", DATA_DIR / "orders.jsonl")
+MODEL_FILE = _resolve_file("PREDICTOR_MODEL_FILE", DATA_DIR / "model.json")
+RESULTS_FILE = _resolve_file("PREDICTOR_RESULTS_FILE", DATA_DIR / "prediction_results.txt")
+
+CAMERA_IDS = _parse_camera_ids(os.environ.get("PREDICTOR_CAMERA_IDS"))
+FEATURE_NAMES = [f"cam{camera_id}_{direction}" for camera_id in CAMERA_IDS for direction in ("left", "right")]
 TAKOYAKI_UNIT_PRICE = int(os.environ.get("TAKOYAKI_UNIT_PRICE", "50"))
 
 
@@ -83,12 +110,12 @@ def _parse_timestamp(value: str) -> datetime:
     return datetime.fromisoformat(value)
 
 
-def load_detections() -> List[Dict]:
-    return _read_jsonl(DETECTIONS_FILE)
+def load_detections(path: Path | None = None) -> List[Dict]:
+    return _read_jsonl(path or DETECTIONS_FILE)
 
 
-def load_orders() -> List[Dict]:
-    return _read_jsonl(ORDERS_FILE)
+def load_orders(path: Path | None = None) -> List[Dict]:
+    return _read_jsonl(path or ORDERS_FILE)
 
 
 def _empty_feature_template() -> Dict[str, int]:
@@ -242,9 +269,11 @@ def _order_target_value(row: Dict) -> int:
 def build_dataset_records(
     horizon_minutes: int = 10,
     tolerance_minutes: int = 5,
+    detections_path: Path | None = None,
+    orders_path: Path | None = None,
 ) -> List[Tuple[datetime, Dict[str, int], int, datetime]]:
-    detections = load_detections()
-    orders_raw = load_orders()
+    detections = load_detections(detections_path)
+    orders_raw = load_orders(orders_path)
     if not detections or not orders_raw:
         return []
 
@@ -292,6 +321,17 @@ def save_model(model_dict: Dict) -> None:
 
 def load_latest_features() -> Optional[Tuple[str, Dict[str, int]]]:
     detections = load_detections()
+    if not detections:
+        return None
+    feature_map = build_feature_map(detections)
+    if not feature_map:
+        return None
+    latest_ts = max(feature_map.keys())
+    return latest_ts, feature_map[latest_ts]
+
+
+def load_latest_features_from(path: Path) -> Optional[Tuple[str, Dict[str, int]]]:
+    detections = load_detections(path)
     if not detections:
         return None
     feature_map = build_feature_map(detections)

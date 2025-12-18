@@ -224,6 +224,10 @@ ls -l /dev/video*
 
 **データソース**: 4つのカメラからのYOLO検出結果（分単位）
 
+補足: 現行システムでは実データがプロジェクト直下の `data/detections_minutely.jsonl` に出力される場合があります。\
+その場合は予測側を環境変数で実データに向けられます（カメラIDが 0 始まりなら `PREDICTOR_CAMERA_IDS=0` など）。\
+リポジトリにはこの設定をまとめたスクリプトを用意しています（後述「現場運用 (実データ)」参照）。
+
 **ファイル形式**: JSONL（JSON Lines）形式
 - 1行に1つのJSONオブジェクト
 - 各行は改行文字（`\n`）で区切られる
@@ -275,6 +279,45 @@ with open(detections_path, 'r', encoding='utf-8') as f:
 **予測に使用される特徴量**:
 - `right_count` と `left_count` のみが予測モデルに使用される
 - 特徴量名: `cam{camera_id}_right`, `cam{camera_id}_left`
+
+## 現場運用 (実データ)
+
+12月18日の実データをはじめ、`data/detections_minutely.jsonl` に記録されるカウントをそのまま予測モデルに流用できます。\
+現場では以下の2ステップだけで済むようにスクリプト化しました。
+
+1. **最新データでモデルを学習**  
+   ```bash
+   ./scripts/train_predictor_real.sh
+   ```
+   - `.venv` があれば自動で読み込まれます
+   - 実データ (`data/detections_minutely.jsonl`) と本番の注文データ (`predictor/data/orders.jsonl`) を参照します
+   - 学習済みモデルは `predictor/data/model_real.json` に保存されます
+   - 追加データを取得したら再実行してください（夜の片付け時などに1回走らせる運用がおすすめ）
+
+2. **予測ダッシュボードを実データ入力で起動**  
+   ```bash
+   ./scripts/run_predictor_real.sh
+   ```
+   - `PREDICTOR_*` 系の環境変数（検出ファイル/カメラID/モデルファイルなど）を自動でセットしてから `predictor/app.py` を起動します
+    - 既存の自動起動仕組み（systemd や `tmux` スクリプト等）があれば、`ExecStart` をこのシェルに置き換えるだけで現場での手操作を最小化できます
+    - 5100番ポート（既定値）は `PREDICT_PORT` を上書きすると変更可能です
+    - 画面の「ダミー開始」を押している間は、予測入力を `predictor/data/detections_minutely.jsonl`（ダミー）に自動で切り替えます（停止すると実データに戻ります）
+
+### systemd 連携例
+
+現場PCで systemd を使っている場合は下記のようなユニットを作成しておくと、OS起動と同時に実データでの予測が立ち上がります。
+
+リポジトリに `systemd/takoyaki-predictor.service` を用意してあるので、次の手順で導入すれば OK です。
+
+```bash
+cd /home/nishikohh/peopleflow_app
+sudo cp systemd/takoyaki-predictor.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now takoyaki-predictor.service
+```
+
+以後は OS 起動時に自動で予測ダッシュボードが立ち上がります。コードを更新したときやサービス設定を変えたときは、`sudo systemctl daemon-reload && sudo systemctl restart takoyaki-predictor.service` を実行すると確実に再起動できます（`daemon-reload` だけではプロセスは再起動されない点に注意）。\
+学習スクリプト `train_predictor_real.sh` は一度 `model_real.json` を作ればOKですが、データが増えたときに `sudo systemctl stop takoyaki-predictor.service` → `./scripts/train_predictor_real.sh` → `sudo systemctl start takoyaki-predictor.service` の流れで更新できます。
 
 ### 2. 注文データ (`predictor/data/orders.jsonl`)
 

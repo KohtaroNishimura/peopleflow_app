@@ -9,6 +9,7 @@ import queue
 import threading
 import json
 import os
+from pathlib import Path
 import config
 
 try:
@@ -77,7 +78,8 @@ class YOLOProcessor:
         """
         self.confidence_threshold = confidence_threshold
         self.detection_queue = queue.Queue()  # 検出結果を保存するキュー
-        self.data_dir = "data"
+        default_data_dir = str(Path(__file__).resolve().parents[1] / "data")
+        self.data_dir = os.environ.get("PEOPLEFLOW_DATA_DIR", default_data_dir)
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)
         

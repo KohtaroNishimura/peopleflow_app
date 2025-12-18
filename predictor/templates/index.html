@@ -351,6 +351,7 @@
             <div class="left-panel">
                 <div class="prediction-header">
                     <h2>10分後の予測注文数</h2>
+                    <div class="sub-text" id="dataSource">入力: -</div>
                     <div class="prediction-value-large" id="prediction">-</div>
                     <div class="prediction-unit">個</div>
                 </div>
@@ -846,6 +847,11 @@
                 
                 const prediction = parseFloat(data.prediction);
                 document.getElementById('prediction').textContent = prediction.toFixed(1);
+
+                const sourceEl = document.getElementById('dataSource');
+                if (sourceEl) {
+                    sourceEl.textContent = data.source === 'dummy' ? '入力: ダミー' : '入力: 実データ';
+                }
                 
                 // 忙しさインジケータを更新
                 updateBusynessIndicator(prediction);
@@ -908,16 +914,17 @@
                 
                 // 根拠を表示
                 const reasonsDiv = document.getElementById('reasons');
-                if (data.reasons && data.reasons.length > 0) {
-                    reasonsDiv.innerHTML = data.reasons.slice(0, 5).map(reason => `
+                const reasons = data.reasons || data.influences || [];
+                if (reasons && reasons.length > 0) {
+                    reasonsDiv.innerHTML = reasons.slice(0, 5).map(reason => `
                         <div class="reason-item">
                             <div class="reason-item-header">
-                                <div class="reason-label">${reason.camera} ${reason.direction}</div>
-                                <div class="reason-impact ${reason.impact > 0 ? 'positive' : 'negative'}">
-                                    ${reason.impact > 0 ? '+' : ''}${reason.impact.toFixed(2)}
+                                <div class="reason-label">${reason.camera || reason.feature} ${reason.direction || ''}</div>
+                                <div class="reason-impact ${(reason.impact ?? reason.contribution) > 0 ? 'positive' : 'negative'}">
+                                    ${((reason.impact ?? reason.contribution) > 0 ? '+' : '')}${(reason.impact ?? reason.contribution).toFixed(2)}
                                 </div>
                             </div>
-                            <div class="reason-detail">${reason.count}人/min</div>
+                            <div class="reason-detail">${(reason.count ?? reason.value)}人/min</div>
                         </div>
                     `).join('');
                 } else {
