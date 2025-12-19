@@ -42,6 +42,12 @@ camera_streams = {}  # カメラストリームの管理
 stream_queues = {}  # 各カメラのフレームキュー
 merged_frame = None  # 統合されたフレーム
 merged_frame_lock = threading.Lock()  # 統合フレームのロック
+merged_frame_version = 0  # フレーム更新版数
+processed_frame_cache = None  # YOLO処理済みフレーム
+processed_frame_lock = threading.Lock()
+processed_frame_version = 0
+processing_thread = None
+processing_thread_running = False
 running = True  # アプリケーションの実行状態
 camera_threads = []  # カメラスレッドのリスト
 camera_running = {}  # 各カメラの実行状態（カメラIDをキー、True/Falseを値）
@@ -65,7 +71,7 @@ def update_merged_frame(camera_id, frame):
     4つのカメラフレームを1つの画像に統合
     接続されているカメラだけでマージし、未接続のカメラは空白を開ける
     """
-    global merged_frame
+    global merged_frame, merged_frame_version
     
     # カメラフレームを保存
     camera_streams[camera_id] = frame.copy()
@@ -117,6 +123,7 @@ def update_merged_frame(camera_id, frame):
     
     with merged_frame_lock:
         merged_frame = merged
+        merged_frame_version += 1
 
 def get_latest_frame(camera_id):
     """
@@ -185,49 +192,105 @@ def generate_frames(camera_id):
             time.sleep(0.1)
             continue
 
-def generate_merged_frame():
+def _process_merged_frames_loop():
     """
-    統合フレーム用のジェネレータ（YOLO処理用）
-    YOLO処理を実行して検出結果を描画したフレームを返す
+    UI表示に依存せず統合フレームへYOLO処理を走らせるバックグラウンドタスク
     """
-    while True:
+    global processed_frame_cache, processed_frame_version
+    print("[YOLO] 背景処理スレッドを開始します")
+    last_processed_version = -1
+    while processing_thread_running:
         try:
             with merged_frame_lock:
-                if merged_frame is not None:
-                    frame = merged_frame.copy()
-                else:
-                    frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                    cv2.putText(frame, 'Merged Frame - No Signal', 
-                               (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-            
-            # YOLO処理を実行（統合フレームのためcamera_idはNone）
+                frame = merged_frame.copy() if merged_frame is not None else None
+                current_version = merged_frame_version
+            if frame is None or current_version == last_processed_version:
+                socketio.sleep(0.05)
+                continue
+            last_processed_version = current_version
+
             processed_frame, detections = yolo_processor.process_frame(frame, camera_id=None)
-            
-            # 検出結果をSocketIOで送信（リアルタイム更新用）
+            with processed_frame_lock:
+                processed_frame_cache = processed_frame.copy()
+                processed_frame_version = current_version
+
             if detections:
                 try:
-                    socketio.emit('yolo_detections', {
-                        'detections': detections,
-                        'timestamp': datetime.now().isoformat()
-                    })
-                except:
-                    pass  # SocketIOエラーは無視
-            
-            ret, buffer = cv2.imencode('.jpg', processed_frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
+                    socketio.emit(
+                        'yolo_detections',
+                        {'detections': detections, 'timestamp': datetime.now().isoformat()},
+                        namespace='/',
+                    )
+                except Exception as emit_error:
+                    print(f"[YOLO] SocketIO送信エラー: {emit_error}")
+
+            socketio.sleep(0)
+        except Exception as loop_error:
+            print(f"[YOLO] 背景処理ループでエラー: {loop_error}")
+            socketio.sleep(0.2)
+    print("[YOLO] 背景処理スレッドを停止しました")
+
+
+def ensure_processing_thread():
+    """YOLO処理用バックグラウンドスレッドを起動"""
+    global processing_thread, processing_thread_running
+    if processing_thread_running:
+        return
+    processing_thread_running = True
+    processing_thread = socketio.start_background_task(_process_merged_frames_loop)
+
+
+def stop_processing_thread():
+    """バックグラウンド処理スレッドの停止"""
+    global processing_thread, processing_thread_running
+    processing_thread_running = False
+    if processing_thread and processing_thread.is_alive():
+        processing_thread.join(timeout=2)
+    processing_thread = None
+
+
+def generate_merged_frame():
+    """
+    統合フレーム用のジェネレータ（YOLO処理済みフレームを配信）
+    """
+    ensure_processing_thread()
+    while True:
+        try:
+            with processed_frame_lock:
+                if processed_frame_cache is not None:
+                    frame = processed_frame_cache.copy()
+                else:
+                    frame = None
+
+            if frame is None:
+                frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                cv2.putText(
+                    frame,
+                    'Merged Frame - No Signal',
+                    (50, 240),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (255, 255, 255),
+                    2,
+                )
+
+            ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
             if not ret:
                 time.sleep(0.033)
                 continue
-            
+
             frame_bytes = buffer.tobytes()
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            
+            yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n'
+
             # フレームレート制御（約30fps）
             time.sleep(0.033)
         except Exception as e:
             print(f"generate_merged_frame error: {e}")
             time.sleep(0.1)
-            continue
+
+
+# UI表示の有無に関わらずYOLO処理を常駐させる
+ensure_processing_thread()
 
 @app.route('/')
 def index():
@@ -438,6 +501,7 @@ def signal_handler(sig, frame):
     print("\n\nアプリケーションを終了しています...")
     running = False
     
+    stop_processing_thread()
     # 集計スレッドを停止
     yolo_processor.stop_aggregation_thread()
     
