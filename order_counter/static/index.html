@@ -202,6 +202,16 @@
         color: #111827;
       }
 
+      .history-clear {
+        border: none;
+        background: transparent;
+        color: #dc2626;
+        font-weight: 600;
+        font-size: 0.85rem;
+        padding: 0;
+        touch-action: manipulation;
+      }
+
       .history-hint {
         font-size: 0.8rem;
         color: #5f6b7c;
@@ -214,6 +224,10 @@
       }
 
       .history-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 10px;
         border: 1px solid #e5e7eb;
         border-radius: 10px;
         padding: 10px 12px;
@@ -225,6 +239,19 @@
         display: flex;
         flex-direction: column;
         gap: 4px;
+        flex: 1;
+      }
+
+      .history-delete {
+        border: none;
+        background: transparent;
+        color: #dc2626;
+        font-weight: 600;
+        font-size: 0.9rem;
+        padding: 6px 8px;
+        border-radius: 10px;
+        align-self: center;
+        touch-action: manipulation;
       }
 
       .history-total {
@@ -251,7 +278,6 @@
   </head>
   <body>
     <h1>日次注文カウンター</h1>
-    <div id="todayLabel" class="storage-label"></div>
     <div id="orderSyncStatus" class="sync-status">データ連携: 未送信</div>
 
     <div class="cart-box">
@@ -270,9 +296,6 @@
     <div id="menuContainer" class="menu-grid"></div>
 
     <div class="actions">
-      <button id="exportButton" class="action-button">今日のJSONを書き出す</button>
-      <button id="resetButton" class="action-button secondary">今日のデータをリセット</button>
-
       <div class="cart-hint" style="margin-top:12px;">人流カメラ（ストリーミング）</div>
       <div id="streamStatus" class="cart-hint">配信状態: 不明</div>
 
@@ -296,6 +319,7 @@
         <span>今日の注文履歴</span>
         <div class="history-meta">
           <span id="dailyTotal" class="history-total-label">合計 ¥0</span>
+          <button id="clearHistoryButton" class="history-clear" disabled>履歴を削除</button>
         </div>
       </div>
       <div id="historyList" class="history-list"></div>

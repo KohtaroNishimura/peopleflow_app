@@ -40,6 +40,7 @@ TAKOYAKI_MENU_COUNTS = {
     "fourteen": 14,
     "takosen": 2,
     "topping": 0,
+    "adjustminus50": 0,
 }
 TAKOYAKI_NAME_COUNTS = {
     _normalize_text("4"): 4,
@@ -58,6 +59,11 @@ TAKOYAKI_NAME_COUNTS = {
     _normalize_text("tako sen"): 2,
     _normalize_text("トッピング"): 0,
     _normalize_text("topping"): 0,
+    _normalize_text("調整 -50"): 0,
+    _normalize_text("調整-50"): 0,
+    _normalize_text("-50"): 0,
+    _normalize_text("-50円"): 0,
+    _normalize_text("調整 -50円"): 0,
 }
 
 STREAM_CMD = [PYTHON, str(ROOT / "camera_server.py"), str(CAMERA_ID), str(CAMERA_PORT)]
