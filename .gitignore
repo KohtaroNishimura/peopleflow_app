@@ -21,6 +21,7 @@ Thumbs.db
 # Data and outputs
 /data/
 data/
+predictor/data/*.jsonl
 *.sqlite
 *.db
 *.jsonl

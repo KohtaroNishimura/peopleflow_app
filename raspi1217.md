@@ -5,7 +5,7 @@
 
 # 📷 Raspberry Pi Zero 2 W 遠隔ライブカメラ構築
 
-引き継ぎまとめ（2025-12-17 時点）
+引き継ぎまとめ（2025-12-18 時点）
 
 ## 1. プロジェクト概要
 
@@ -87,7 +87,7 @@ ls -l test.jpg
 ```markdown
 # 📷 Raspberry Pi Zero 2 W 遠隔ライブカメラ構築
 
-**引き継ぎまとめ（最新版 / 2025-12-17）**
+**引き継ぎまとめ（最新版 / 2025-12-18）**
 
 ## 1. プロジェクト概要（最新）
 
@@ -311,4 +311,85 @@ sudo reboot
 上記はchat gptと作っていたraspi+camera_server.pyなどをまとめてもらったものです。参考にしてraspi1217.mdを修正が必要であれば修正してください。
 - [ ] `raspi1217.md` の内容を最終版に整形（必要なら追記・修正）。
 
-``` 
+---
+
+## 起動手順まとめ（再起動後もこれでOK）
+
+### 子機（Raspberry Pi）📷
+1. Piの電源を入れる（USBカメラを挿したまま）。
+2. 親機からSSHで接続  
+   - `ssh pi@192.168.10.106`  # camera001  
+   - `ssh pi@192.168.10.107`  # camera002
+3. リポジトリへ移動  
+   - `cd ~/peopleflow_app`
+4. カメラサーバーを起動（ターミナルは開いたまま）  
+   - camera0 → `python3 camera_server.py 0 5001`  
+   - camera1 → `python3 camera_server.py 1 5002`  
+   - 停止は `Ctrl+C`
+5. 動作確認（任意）  
+   - 親機ブラウザで `http://192.168.10.106:5001/` などにアクセスし、映像/情報を確認。
+
+### 親機（Windows PC）🖥️
+1. リポジトリへ移動  
+   - `cd C:\Users\TY\Desktop\PGM\peopleflow_app`
+2. 仮想環境を有効化  
+   - `.\.venv\Scripts\activate`
+3. YOLO用の環境変数をセット（起動するターミナルごとに実行）  
+   - `$env:YOLO_MODEL_PATH="C:\Users\TY\Desktop\PGM\peopleflow_app\yolov8n.pt"`  
+   - `$env:KNOWN_CHILD_IPS="192.168.10.106,192.168.10.107"`  
+   - `$env:CAMERA_PORTS="5001,5002,5003,5004"`
+4. マスターコンソール起動  
+   - `python master_console/app.py`
+5. ブラウザで確認  
+   - `http://localhost:5050` を開く → 「接続を更新」を押す  
+   - カメラ0/1が緑ランプ・映像表示、統合フレームが緑ならOK  
+   - 人物が映ればYOLOのバウンディングボックスが出る。
+
+### YOLOが動かないときのチェック ✅
+- プロンプト先頭に `(.venv)` が付いているか確認（仮想環境が有効か）。  
+- 依存パッケージ確認:  
+  - `pip show ultralytics torch torchvision matplotlib pandas`  
+  - 足りない場合は順に（必要時のみ再実行）  
+    - `pip install --no-cache-dir "torch==2.9.1+cpu" "torchvision==0.24.1+cpu" --extra-index-url https://download.pytorch.org/whl/cpu`  
+    - `pip install --no-cache-dir --only-binary=:all: "matplotlib==3.8.4"`  
+    - `pip install --no-cache-dir "ultralytics==8.3.21"`  
+- 起動ログに `YOLOモデルを読み込みました` が出ているか確認。  
+- 映像に人が映っているかを確認（人がいないと検出が出ません）。
+
+
+再起動後の手順を簡潔にまとめます。
+
+1) カメラをPiに接続して電源ON
+camera001 用PiにUSBカメラを挿す → 電源投入。
+camera002 用Piも同様。
+2) PCからPiへSSHし、カメラサーバー起動
+PowerShellで（IPは確認済みのものを使う）:
+
+ssh pi@192.168.10.106   # camera001
+# ログイン後:
+cd ~/peopleflow_app
+python3 camera_server.py 0 5001
+別ターミナルで:
+
+ssh pi@192.168.10.107   # camera002
+cd ~/peopleflow_app
+python3 camera_server.py 1 5002
+※この2つのターミナルは開いたまま。止めるときは Ctrl+C。
+
+3) PCでマスターコンソール起動
+PowerShellで:
+
+cd C:\Users\TY\Desktop\PGM\peopleflow_app
+.\.venv\Scripts\activate
+$env:KNOWN_CHILD_IPS="192.168.10.106,192.168.10.107"
+python master_console/app.py
+4) ブラウザで確認
+http://localhost:5000 を開く → 「接続を更新」を押す。
+カメラ0/1が緑ランプ＆映像が出ればOK。個別確認は http://192.168.10.106:5001/ と http://192.168.10.107:5002/。
+以上です。
+
+---
+
+```bash
+sudo shutdown -h now
+```
