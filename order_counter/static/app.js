@@ -3,9 +3,9 @@
 window.addEventListener('DOMContentLoaded', () => {
   const MENU = {
     four: { name: '4', price: 350 },
-    six: { name: '6', price: 450 },
-    eight: { name: '8', price: 550 },
-    ten: { name: '10', price: 650 },
+    six: { name: '6', price: 500 },
+    eight: { name: '8', price: 600 },
+    ten: { name: '10', price: 700 },
     fourteen: { name: '14', price: 1000 },
     takosen: { name: 'たこせん', price: 300 },
     topping: { name: 'トッピング', price: 50 },

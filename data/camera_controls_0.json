@@ -1,5 +1,5 @@
 {
-  "auto_exposure": true,
-  "exposure": null,
+  "auto_exposure": false,
+  "exposure": 1,
   "software_ev": 0.0
 }
