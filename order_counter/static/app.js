@@ -131,8 +131,80 @@ window.addEventListener('DOMContentLoaded', () => {
 
   const getTodayString = () => getLocalDateString();
   const getTodayUtcString = () => new Date().toISOString().slice(0, 10);
-  const ordersStorageKey = () => `orders_${getTodayString()}`;
-  const cartStorageKey = () => `cart_${getTodayString()}`;
+  const ACTIVE_DAY_STORAGE_KEY = 'order_counter_active_day_v1';
+  const LAST_ACTIVITY_STORAGE_KEY = 'order_counter_last_activity_ms_v1';
+  const ACTIVE_DAY_GRACE_MS = 2 * 60 * 60 * 1000;
+
+  const parseDateKeyToMs = (dateKey) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
+    const [year, month, day] = dateKey.split('-').map((value) => Number(value));
+    const date = new Date(year, month - 1, day);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.getTime();
+  };
+
+  const dayDiffAbs = (left, right) => {
+    const leftMs = parseDateKeyToMs(left);
+    const rightMs = parseDateKeyToMs(right);
+    if (leftMs === null || rightMs === null) return null;
+    return Math.abs(Math.round((rightMs - leftMs) / (24 * 60 * 60 * 1000)));
+  };
+
+  const hasDataForDateKey = (dateKey) => {
+    const ordersRaw = localStorage.getItem(`orders_${dateKey}`);
+    const cartRaw = localStorage.getItem(`cart_${dateKey}`);
+    const hasOrders = Boolean(ordersRaw && ordersRaw !== '[]');
+    const hasCart = Boolean(cartRaw && cartRaw !== '[]');
+    return hasOrders || hasCart;
+  };
+
+  const readLastActivityMs = () => {
+    const raw = localStorage.getItem(LAST_ACTIVITY_STORAGE_KEY);
+    if (!raw) return null;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : null;
+  };
+
+  const touchActivity = () => {
+    localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(Date.now()));
+  };
+
+  const setActiveDateKey = (dateKey) => {
+    localStorage.setItem(ACTIVE_DAY_STORAGE_KEY, dateKey);
+  };
+
+  const resolveActiveDateKey = () => {
+    const today = getTodayString();
+    const stored = (localStorage.getItem(ACTIVE_DAY_STORAGE_KEY) || '').trim();
+    if (!stored) {
+      setActiveDateKey(today);
+      return today;
+    }
+    if (stored === today) {
+      return stored;
+    }
+
+    const storedHasData = hasDataForDateKey(stored);
+    const todayHasData = hasDataForDateKey(today);
+    const diffDays = dayDiffAbs(stored, today);
+    const lastActivityMs = readLastActivityMs();
+    const recentlyActive =
+      lastActivityMs === null
+        ? true
+        : Date.now() - lastActivityMs >= 0 && Date.now() - lastActivityMs < ACTIVE_DAY_GRACE_MS;
+
+    if (storedHasData && !todayHasData && diffDays !== null && diffDays <= 1 && recentlyActive) {
+      console.warn(`日時の揺れを検出: 運用日キー ${stored} を継続します（端末日付 ${today}）`);
+      return stored;
+    }
+
+    setActiveDateKey(today);
+    return today;
+  };
+
+  let activeDateKey = resolveActiveDateKey();
+  const ordersStorageKey = () => `orders_${activeDateKey}`;
+  const cartStorageKey = () => `cart_${activeDateKey}`;
 
   const normalizeTimeString = (value) => {
     if (!value) return getLocalDateTimeString();
@@ -204,9 +276,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
   const saveCheckouts = (checkouts) => {
     localStorage.setItem(ordersStorageKey(), JSON.stringify(checkouts));
+    touchActivity();
   };
 
-  const syncStateStorageKey = () => `orders_synced_${getTodayString()}`;
+  const syncStateStorageKey = () => `orders_synced_${activeDateKey}`;
 
   const loadSyncedIdsFromStorage = () => {
     const raw = localStorage.getItem(syncStateStorageKey());
@@ -260,9 +333,11 @@ window.addEventListener('DOMContentLoaded', () => {
   const saveCart = (cart) => {
     if (!cart || cart.length === 0) {
       localStorage.removeItem(cartStorageKey());
+      touchActivity();
       return;
     }
     localStorage.setItem(cartStorageKey(), JSON.stringify(cart));
+    touchActivity();
   };
 
   const aggregateCartItems = (cart) => {
@@ -285,7 +360,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   const renderTodayLabel = () => {
     if (!todayLabel) return;
-    todayLabel.textContent = `データキー: ${ordersStorageKey()} / カート: ${cartStorageKey()}`;
+    todayLabel.textContent = `運用日: ${activeDateKey}（端末日付: ${getTodayString()}）/ データキー: ${ordersStorageKey()} / カート: ${cartStorageKey()}`;
   };
 
   const renderHistory = (checkouts) => {
@@ -491,13 +566,14 @@ window.addEventListener('DOMContentLoaded', () => {
   };
 
   const clearHistory = () => {
-    const date = getTodayString();
+    const date = activeDateKey;
     const hasCheckouts = loadCheckouts().length > 0;
     if (!hasCheckouts) return;
     const ok = confirm(`${date} の注文履歴を削除します。よろしいですか？`);
     if (!ok) return;
     localStorage.removeItem(ordersStorageKey());
     localStorage.removeItem(syncStateStorageKey());
+    touchActivity();
     syncedIds = new Set();
     refreshCheckouts([]);
   };
@@ -517,7 +593,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const init = () => {
     // 以前の実装(UTC日付キー)で保存したデータがある場合、今日(ローカル日付キー)へ移行
     const migrateStorageIfNeeded = () => {
-      const local = getTodayString();
+      const local = activeDateKey;
       const utc = getTodayUtcString();
       if (local === utc) return;
 
